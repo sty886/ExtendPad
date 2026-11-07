@@ -1,106 +1,105 @@
-# Launch posts: drafts, not posted
+# 发布帖：草稿，尚未发布
 
-Ready-to-publish copy for the MeowDisplay launch (October 25, 2026): the
-iPhone/iPad app on the App Store and the Mac app as a signed, notarized
-download. Nothing here has been posted.
+为 MeowDisplay 发布准备的即发文案（2026 年 10 月 25 日）：iPhone/iPad App 上架
+App Store，Mac App 以已签名、已公证的下载形式提供。此处内容均未发布。
 
-Verified links:
+已验证的链接：
 
-- Website (download buttons for both apps): https://meowdisplay.app/
-- Mac download: https://github.com/raiseCatError/meowdisplay/releases/latest/download/MeowDisplay.dmg
-- App Store: https://apps.apple.com/us/app/meowdisplay/id6817552864
-- Setup: https://meowdisplay.app/docs
-- Source: https://github.com/raiseCatError/meowdisplay
+- 网站（两个 App 的下载按钮）：https://meowdisplay.app/
+- Mac 下载：https://github.com/raiseCatError/meowdisplay/releases/latest/download/MeowDisplay.dmg
+- App Store：https://apps.apple.com/us/app/meowdisplay/id6817552864
+- 安装设置：https://meowdisplay.app/docs
+- 源码：https://github.com/raiseCatError/meowdisplay
 
-Prefer linking https://meowdisplay.app/ in posts: it has both downloads, and a
-bare DMG link starts a download without context.
+帖子中优先链接 https://meowdisplay.app/：它包含两个下载，而直接使用
+DMG 链接会在没有上下文的情况下开始下载。
 
 ---
 
 ## X / Twitter
 
-> MeowDisplay is out 🐈
+> MeowDisplay 发布了 🐈
 >
-> Turn your iPhone or iPad into a second display for your Mac: mirror or extend, then control it with touch, trackpad gestures and a keyboard. USB or Wi-Fi. Free, open source, no account.
+> 把你的 iPhone 或 iPad 变成 Mac 的第二块屏幕：镜像或扩展，然后用触摸、触控板手势和键盘控制它。支持 USB 或 Wi-Fi。免费、开源、无需账号。
 >
-> Mac app + App Store: https://meowdisplay.app
+> Mac App + App Store：https://meowdisplay.app
 
-Reply to the first post:
+回复第一条帖子：
 
-> iPhone/iPad: https://apps.apple.com/us/app/meowdisplay/id6817552864
-> Code: https://github.com/raiseCatError/meowdisplay
+> iPhone/iPad：https://apps.apple.com/us/app/meowdisplay/id6817552864
+> 代码：https://github.com/raiseCatError/meowdisplay
 >
-> Built on the great OpenDisplay project.
+> 基于出色的 OpenDisplay 项目构建。
 
 ---
 
 ## Reddit
 
-Check each subreddit's self-promotion rules first (r/macapps, r/iOSProgramming
-Saturday showcase, r/opensource). Post to one or two communities, not all at
-once, and stay in the thread to answer questions.
+先查看每个 subreddit 的自我推广规则（r/macapps、r/iOSProgramming
+周六展示、r/opensource）。只发到一两个社区，不要一次全发，
+并留在帖子中回答问题。
 
-**Title:** I made MeowDisplay, a free and open-source app that turns your iPhone or iPad into a display for your Mac
+**标题：** 我做了 MeowDisplay，一个免费开源的 App，把你的 iPhone 或 iPad 变成 Mac 的显示器
 
-**Body:**
+**正文：**
 
-> Hi! MeowDisplay turns an iPhone or iPad into a mirrored or extended display for a Mac, and lets you control the Mac from it. The iPhone/iPad app is on the App Store and the Mac app is a signed, notarized download.
+> 大家好！MeowDisplay 把 iPhone 或 iPad 变成 Mac 的镜像或扩展显示器，并让你从中控制 Mac。iPhone/iPad App 已上架 App Store，Mac App 是已签名、已公证的下载。
 >
-> **What it does**
+> **功能**
 >
-> - Mirror one of your Mac's displays, or Extend with a virtual display you can drag windows onto (works in clamshell mode without a dummy HDMI plug)
-> - Direct Touch or a trackpad-style pointer, multi-finger gestures (Spaces, Mission Control, Spotlight), keyboard, modifier/shortcut trays
-> - Apple Pencil on supported iPads, Mac system audio on the receiver, Picture in Picture
-> - USB, local Wi-Fi, or Remote Access over a private network you set up yourself (e.g. Tailscale)
-> - Devices pair with a matching code; sessions use mutually authenticated TLS 1.3. No account, no MeowDisplay server, no analytics
+> - 镜像 Mac 的一块显示器，或使用可把窗口拖上去的虚拟显示器进行扩展（在合盖模式下无需 HDMI 假负载也能工作）
+> - 直接触控或触控板式指针、多指手势（空间、调度中心、Spotlight）、键盘、修饰键/快捷键托盘
+> - 支持的 iPad 上可使用 Apple Pencil，接收端可播放 Mac 系统音频，支持画中画
+> - USB、本地 Wi-Fi，或通过你自己搭建的私有网络（例如 Tailscale）进行远程访问
+> - 设备通过匹配码配对；会话使用双向认证的 TLS 1.3。无账号、无 MeowDisplay 服务器、无分析统计
 >
-> **Limitations, honestly**
+> **坦率说明的限制**
 >
-> - Mac-to-iPhone is the most-tested setup; iPad and using another Mac as a receiver need more real-hardware testing.
-> - Controlling the Mac needs Accessibility permission, and every session starts with input off until you allow it.
-> - macOS 14+ for the Mac app, iOS/iPadOS 16.4+ for the receiver. English only for now.
+> - Mac 到 iPhone 是测试最多的组合；iPad 以及用另一台 Mac 作为接收端需要更多真机测试。
+> - 控制 Mac 需要辅助功能权限，每个会话开始时输入都关闭，直到你允许。
+> - Mac App 需要 macOS 14+，接收端需要 iOS/iPadOS 16.4+。目前仅提供英文。
 >
-> **Credit:** MeowDisplay started as a fork of OpenDisplay by Philip Poloczek (https://github.com/peetzweg/opendisplay), which provided the capture/virtual display/encoding foundation. Most of my work since has been on input, gestures, trays, pairing/security, Remote Access and polish. GPL-3.0.
+> **致谢：** MeowDisplay 起初是 Philip Poloczek 的 OpenDisplay（https://github.com/peetzweg/opendisplay）的 fork，后者提供了采集/虚拟显示器/编码基础。此后我的大部分工作集中在输入、手势、托盘、配对/安全、远程访问和打磨上。GPL-3.0。
 >
-> - Website and Mac download: https://meowdisplay.app/
-> - App Store (free): https://apps.apple.com/us/app/meowdisplay/id6817552864
-> - Source: https://github.com/raiseCatError/meowdisplay
+> - 网站和 Mac 下载：https://meowdisplay.app/
+> - App Store（免费）：https://apps.apple.com/us/app/meowdisplay/id6817552864
+> - 源码：https://github.com/raiseCatError/meowdisplay
 >
-> Feedback and bug reports are very welcome, especially from iPad and multi-display setups.
+> 非常欢迎反馈和错误报告，尤其是来自 iPad 和多显示器配置的反馈。
 
 ---
 
 ## LinkedIn
 
-> MeowDisplay is out.
+> MeowDisplay 发布了。
 >
-> It's a free, open-source app I've been building that turns an iPhone or iPad into a mirrored or extended display for a Mac, and lets you control the Mac from it with touch, trackpad gestures, a keyboard and Apple Pencil, over USB or Wi-Fi.
+> 这是我一直在开发的一款免费开源 App，它把 iPhone 或 iPad 变成 Mac 的镜像或扩展显示器，让你通过触摸、触控板手势、键盘和 Apple Pencil 从中控制 Mac，支持 USB 或 Wi-Fi。
 >
-> A few things I cared about along the way: no account, no server in the middle, devices paired with a matching code and every session encrypted. And keeping it open source, building on the excellent OpenDisplay project by Philip Poloczek.
+> 过程中我关注的几点：无账号、中间无服务器、设备通过匹配码配对、每个会话都加密。还有保持开源，并基于 Philip Poloczek 出色的 OpenDisplay 项目构建。
 >
-> The iPhone and iPad app is on the App Store, and the Mac app is a free download.
+> iPhone 和 iPad App 已上架 App Store，Mac App 可免费下载。
 >
-> Website and Mac download: https://meowdisplay.app/
-> App Store: https://apps.apple.com/us/app/meowdisplay/id6817552864 🐾
+> 网站和 Mac 下载：https://meowdisplay.app/
+> App Store：https://apps.apple.com/us/app/meowdisplay/id6817552864 🐾
 
 ---
 
 ## Instagram
 
-**Caption:**
+**配文：**
 
-> Your Mac. Another screen. Anywhere. 🐈
+> 你的 Mac。另一块屏幕。随时随地。🐈
 >
-> MeowDisplay is out: turn your iPhone or iPad into a display for your Mac, and control it with touch, gestures and a keyboard.
+> MeowDisplay 发布了：把 iPhone 或 iPad 变成 Mac 的显示器，用触摸、手势和键盘控制它。
 >
-> Free and open source. No account.
-> Get the Mac app and the iPhone/iPad app: link in bio → meowdisplay.app
+> 免费开源。无需账号。
+> 获取 Mac App 和 iPhone/iPad App：简介链接 → meowdisplay.app
 >
 > #MeowDisplay #Mac #iPad #iPhone #OpenSource #IndieDev
 
-**Story text (one frame each):**
+**快拍文字（每帧一条）：**
 
-1. MeowDisplay is out 🐾
-2. Your iPhone or iPad → a display for your Mac
-3. Free · open source · no account
-4. Link: meowdisplay.app (sticker → https://meowdisplay.app/)
+1. MeowDisplay 发布了 🐾
+2. 你的 iPhone 或 iPad → Mac 的显示器
+3. 免费 · 开源 · 无需账号
+4. 链接：meowdisplay.app（贴纸 → https://meowdisplay.app/）

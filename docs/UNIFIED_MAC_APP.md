@@ -1,201 +1,199 @@
-# One Mac app: Share This Mac and Use This Mac as a Display
+# 一个 Mac 应用：共享此 Mac 与将此 Mac 用作显示器
 
-MeowDisplay.app shares this Mac to iPhones, iPads and other Macs, as it
-always has. It can now also be the display: **Use This Mac as a Display**
-(Overview, or the menu bar) turns on the Mac Receiver role inside the same
-app, with the receiving keyboard and trackpad control from
-[RECEIVER_INPUT.md](RECEIVER_INPUT.md). The standalone **MeowDisplay
-Receiver** keeps shipping for Macs on macOS 12–13.
+MeowDisplay.app 一直如此地把此 Mac 共享给 iPhone、iPad 和其他 Mac。它
+现在也可以作为显示器：**将此 Mac 用作显示器**（概览，或菜单栏）会在
+同一个应用内开启 Mac 接收端角色，并使用
+[RECEIVER_INPUT.md](RECEIVER_INPUT.md) 中描述的接收键盘和触控板控制。
+独立的 **MeowDisplay Receiver** 继续为 macOS 12–13 的 Mac 提供。
 
-Distribution stays signed, notarized direct download with Sparkle. Mac App
-Store distribution is out of scope.
+分发方式仍是通过 Sparkle 的已签名、已公证直接下载。Mac App
+Store 分发不在范围内。
 
-## Why there were two Mac apps
+## 为什么曾经有两个 Mac 应用
 
-| Reason | Fundamental? |
+| 原因 | 根本性？ |
 | --- | --- |
-| The sender needs macOS 14 (ScreenCaptureKit, SMAppService, SwiftUI APIs), while the receiver runs on macOS 12 so old Macs can be displays. | **Yes**, for one bundle covering macOS 12–13 (see below). |
-| The sender is a menu-bar (`LSUIElement`) app; the receiver is a windowed app. | No. An accessory app can switch to a regular one while a window is up. |
-| Each app keeps its pairing identity in a Keychain access group named after its own bundle id. | No for new installs. It does mean a receiver's existing pairings can't simply carry over (see Migration). |
-| Separate bundle ids, Sparkle feeds and release jobs. | No. Historical: the receiver started as a separate target (#145, upstream). |
-| Two `@main` entry points and `AppDelegate`s. | No. These are the only symbol clashes between `Mac/` and `MacReceiver/`. |
-| Both roles in one process share `TrustStore.shared` and one settings domain. | No, but it needed real work: see Trust. |
+| 发送端需要 macOS 14（ScreenCaptureKit、SMAppService、SwiftUI API），而接收端要运行在 macOS 12 上，让旧 Mac 能作为显示器。 | **是**，对于覆盖 macOS 12–13 的单个 bundle（见下文）。 |
+| 发送端是菜单栏（`LSUIElement`）应用；接收端是窗口应用。 | 否。辅助型应用可以在有窗口时切换为常规应用。 |
+| 每个应用把配对身份保存在以自己 bundle id 命名的钥匙串访问组中。 | 对新安装而言否。但这意味着接收端现有的配对不能直接延续（见迁移）。 |
+| 独立的 bundle id、Sparkle feed 和发布任务。 | 否。历史原因：接收端最初是独立目标（#145，上游）。 |
+| 两个 `@main` 入口点和 `AppDelegate`s。 | 否。这些是 `Mac/` 和 `MacReceiver/` 之间仅有的符号冲突。 |
+| 同一进程中的两个角色共享 `TrustStore.shared` 和一个设置域。 | 否，但需要真正的工作：见信任。 |
 
-## Options
+## 选项
 
-**1. Unified macOS 14+ app + standalone receiver for macOS 12–13 (chosen).**
-- **Approach:** the sender target also compiles `MacReceiver/` (minus its app entry point and resources).
-- **Complexity:** no availability gating, because receiver code written for 12 compiles unchanged at 14. The only side effect is a handful of deprecation warnings (`onChange(of:perform:)`).
-- **Builds and tests:** everything in this repository's CI already exercises both targets.
+**1. 统一的 macOS 14+ 应用 + 面向 macOS 12–13 的独立接收端（已选定）。**
+- **做法：** 发送端目标也编译 `MacReceiver/`（减去其应用入口点和资源）。
+- **复杂度：** 无需可用性门控，因为为 12 编写的接收端代码在 14 上原样编译。唯一副作用是少量弃用警告（`onChange(of:perform:)`）。
+- **构建和测试：** 本仓库 CI 中的所有内容已经同时覆盖两个目标。
 
-**2. One macOS 12+ bundle with the sender gated to macOS 14.** Rejected, on
-measured evidence. Compiling the current sender at
-`MACOSX_DEPLOYMENT_TARGET=12.0` fails with **127 distinct availability errors
-across 16 files**, and Swift stops after the first wave, so the real count is
-higher:
+**2. 一个 macOS 12+ 的 bundle，把发送端门控到 macOS 14。** 基于实测证据
+被否决。在 `MACOSX_DEPLOYMENT_TARGET=12.0` 下编译当前发送端会失败，出现
+**跨 16 个文件的 127 个不同的可用性错误**，而且 Swift 在第一波之后停止，
+因此实际数量更高：
 
-| APIs | Errors |
+| API | 错误数 |
 | --- | --- |
-| macOS 13 (grouped `Form` style, `SMAppService`, newer SwiftUI) | 85 |
+| macOS 13（分组的 `Form` 样式、`SMAppService`、较新的 SwiftUI） | 85 |
 | macOS 14 | 16 |
 | ScreenCaptureKit 12.3 | 3 |
-| Existing macOS 26/27 paths whose `#available` checks assume a 14 floor | 23 |
+| 现有 macOS 26/27 路径，其 `#available` 检查假定 14 为下限 | 23 |
 
-Making it work would mean:
-- gating nearly every sender type and view with `@available(macOS 14, *)`
-- a launch path that branches between two apps' worth of UI
-- a sender whose every future change has to stay gated
+让它工作需要：
+- 用 `@available(macOS 14, *)` 门控几乎每个发送端类型和视图
+- 一个在两个应用量级的 UI 之间分支的启动路径
+- 一个每次未来更改都必须保持门控的发送端
 
-None of the macOS 12–13 paths can be tested here. The receiver users on those
-Macs gain nothing over the standalone receiver they already have.
+这里无法测试任何 macOS 12–13 路径。那些 Mac 上的接收端用户相比他们已经
+拥有的独立接收端没有任何收益。
 
-## How the prototype works
+## 原型如何工作
 
-- **One bundle:** `com.raisecaterror.meowdisplay.mac`, macOS 14, still `LSUIElement`, with the sender's feed and entitlements. `project.yml` adds `MacReceiver/` to the sender target, excluding `OpenSidecarMacReceiverApp.swift`, `Info.plist`, the entitlements, string catalogs and asset catalog.
-- **Roles** (`Mac/MacAppRole.swift`):
-  - Exactly one role has live sessions.
-  - Turning the display role on ends the sender's sessions without suppressing reconnect, then starts the receiver.
-  - While it's on, `startSession` refuses. Every auto-connect, Connect, receiver connect request and Remote knock goes through that gate.
-  - Turning it off stops the receiver and lets devices reconnect.
-  - This rules out a Mac streaming to itself, two Macs streaming into each other, and input looping between them, without tearing down the sender's listeners or pairing. Simultaneous roles were judged not worth those risks.
-- **Off by default:** an existing install never starts advertising a receiver. The choice is remembered across launches.
-- **Trust** (`TrustStore.Namespace`, `ReceiverRoleConfiguration`): the receiver role has its own identity and pins under `com.opendisplay.identity.v1.receiver` / `com.opendisplay.trust.v1.receiver`. That's the same separation the two apps had:
-  - Pairing a Mac as this Mac's display never makes it a trusted sender here, and the reverse.
-  - The sender's Keychain names are unchanged and pinned by a test.
-  - The iPhone/iPad app and the standalone receiver don't declare `MeowDisplayReceiverRoleTrust`, so for them `TrustStore.receiverRole` is `TrustStore.shared` and nothing changes.
-- **Approval policy and peer data** (`RolePreferences`): each role keeps its own "Automatically Allow Connections", per-Mac Connection Requests overrides, Remote endpoint hints and Wake metadata. In this app the receiver role's keys are `receiver.`-prefixed (`receiver.incomingSessionAutomaticallyAllow`, `receiver.incomingSessionPeerPolicy.v1`, `receiver.remoteEndpointHints.v1`, `receiver.wakeMetadataHints.v1`, `receiver.inputAutoRequestPeers.v1`, `receiver.autoReconnectEnabled`).
-  - Every call to those stores names its role, so the compiler catches a call site that doesn't.
-  - The receiver role's automatic approval is **off by default**: a Mac connecting to this Mac as a display asks first, until the user turns it on for that role. The sender's stays on by default, as in 1.20.0.
-  - Separate install ids weren't enough on their own: a peer chooses the id it pairs with, so one id can be pinned in both roles.
-  - The sender, the iPhone/iPad app and the standalone receiver keep the original key names, so their saved choices are read exactly as before.
-- **Other settings:** the receiver's remaining keys (`receiverName`, `installID`, `audioPreferred`, `avSyncOffsetMs`, `showAnalytics`, `receiverFullscreen`, `receiverControlPreferences.v1`) are used only by the receiver role. The sender's per-device keys (`extendShape.*`, `receiverMaxFPS.*`, `installIDByUDID`) are used only by the sender. Cat Mode is shared, and is cosmetic.
-- **Settings page:** **This Mac as a Display** in MeowDisplay's Settings (and a link from Overview) holds the role's own settings, apart from the sender's pages:
-  - the switch and status
-  - name
-  - paired sending Macs, with Automatically Allow Connections, each Mac's Connection Requests, Connect and Forget
-  - audio and A/V Sync
+- **一个 bundle：** `com.raisecaterror.meowdisplay.mac`，macOS 14，仍是 `LSUIElement`，带有发送端的 feed 和 entitlements。`project.yml` 把 `MacReceiver/` 加入发送端目标，排除 `OpenSidecarMacReceiverApp.swift`、`Info.plist`、entitlements、字符串目录和资产目录。
+- **角色**（`Mac/MacAppRole.swift`）：
+  - 恰好一个角色拥有活动会话。
+  - 开启显示角色会结束发送端的会话而不抑制重连，然后启动接收端。
+  - 开启期间，`startSession` 会拒绝。每个自动连接、连接、接收端连接请求和远程敲门都经过该门禁。
+  - 关闭它会停止接收端，并让设备重新连接。
+  - 这排除了 Mac 向自身串流、两台 Mac 互相串流，以及它们之间输入循环的可能，同时无需拆除发送端的监听器或配对。同时承担两个角色被认为不值得冒这些风险。
+- **默认关闭：** 现有安装绝不会开始广播接收端。该选择会在多次启动之间记住。
+- **信任**（`TrustStore.Namespace`、`ReceiverRoleConfiguration`）：接收端角色在 `com.opendisplay.identity.v1.receiver` / `com.opendisplay.trust.v1.receiver` 下拥有自己的身份和固定项。这与两个应用曾有的分离相同：
+  - 把一台 Mac 配对为此 Mac 的显示器，绝不会让它在此处成为受信任的发送端，反之亦然。
+  - 发送端的钥匙串名称未改变，并由测试固定。
+  - iPhone/iPad 应用和独立接收端不声明 `MeowDisplayReceiverRoleTrust`，因此对它们来说 `TrustStore.receiverRole` 就是 `TrustStore.shared`，没有任何变化。
+- **批准策略和对端数据**（`RolePreferences`）：每个角色保留自己的“自动允许连接”、每 Mac 的连接请求覆盖、远程端点提示和唤醒元数据。在此应用中，接收端角色的键以 `receiver.` 为前缀（`receiver.incomingSessionAutomaticallyAllow`、`receiver.incomingSessionPeerPolicy.v1`、`receiver.remoteEndpointHints.v1`、`receiver.wakeMetadataHints.v1`、`receiver.inputAutoRequestPeers.v1`、`receiver.autoReconnectEnabled`）。
+  - 对这些存储的每次调用都会指明其角色，因此编译器能捕获未指明角色的调用点。
+  - 接收端角色的自动批准**默认关闭**：一台 Mac 作为显示器连接到此 Mac 时会先询问，直到用户为该角色开启。发送端保持默认开启，与 1.20.0 一样。
+  - 单独的安装 id 本身还不够：对端会选择它配对的 id，因此一个 id 可以在两个角色中都被固定。
+  - 发送端、iPhone/iPad 应用和独立接收端保留原始键名，因此它们保存的选择会完全像以前一样读取。
+- **其他设置：** 接收端剩余的键（`receiverName`、`installID`、`audioPreferred`、`avSyncOffsetMs`、`showAnalytics`、`receiverFullscreen`、`receiverControlPreferences.v1`）只由接收端角色使用。发送端的每设备键（`extendShape.*`、`receiverMaxFPS.*`、`installIDByUDID`）只由发送端使用。猫咪模式是共享的，且仅影响外观。
+- **设置页面：** MeowDisplay 设置中的 **将此 Mac 用作显示器**（以及来自概览的链接）保存该角色自己的设置，与发送端的页面分开：
+  - 开关和状态
+  - 名称
+  - 已配对的发送 Mac，以及“自动允许连接”、每台 Mac 的“连接请求”、“连接”和“忘记”
+  - 音频和音画同步
   
-  Its sections are the standalone receiver's own, shared between both apps. With the role off, paired Macs are still listed and can be forgotten, without putting this Mac on the network.
-- **No self-discovery:** the sender ignores this app's receiver in its discovery and pairing browsers, and the receiver ignores this app's sender in its Mac-pairing browser (`SameAppPeerFilter`).
-- **Not advertised as a sender while a display:** with the role on, the sender withdraws its `_opendisplay-mac-pair._tcp` advertisement, so other receivers' Nearby lists don't offer this Mac to share with them. It comes back when the role is turned off.
-  - Receivers use that advertisement only for listing and starting pairing; reconnect doesn't depend on it.
-  - Paired receivers still list this Mac from their pins. A Connect or Remote knock from them is refused by the role gate, as before.
-- **Window and focus:** while the display window is up the app is a regular app (Dock, Command-Tab), so Command-Tab is always a way out. Changing the Dock/menu-bar setting meanwhile doesn't undo that. It returns to the user's presentation when the window goes away.
-- **Mirror unavailable:** when the sending Mac is headless and Mirror was asked for, Settings opens with the standalone receiver's "Use Extend" offer.
-- **Off and straight back on:** the new receiver starts only after the old one has released its listeners and network services. A stopped receiver is retired: a listener retry scheduled before the stop can't reopen a port.
-- **Quit:** with the display role on, quitting sends the receiver's `closing` first, as the standalone receiver does.
-- **Two receivers on one Mac** (`ReceiverOwnershipLock`): the display role and the standalone receiver both take one kernel `flock` on `~/Library/Application Support/MeowDisplay/receiver.lock` before opening any listener or advertising anything. Neither app is sandboxed, so both use the same file.
-  - Whichever starts second, in either order, binds nothing. It shows what to quit, checks again every 2 seconds until it starts or is turned off (`stop()` cancels the check), and starts by itself once the other lets go.
-  - The owner releases the lock only after its listeners have closed, and keeps the descriptor open the whole time it owns the ports. The kernel releases it if the owner quits or crashes, so a stale lock can't block anyone. Release never unlinks the file: a waiting receiver must keep locking the same file.
-  - Already-released MeowDisplay Receiver builds predate the lock, so the display role also waits while any standalone receiver is running (bundle id).
-  - Never needed for safety: a second bind on the same port fails with "address in use" rather than sharing it (measured). The lock makes that failure explicit and recoverable instead of a silent retry loop.
-- **The lock file can't be planted or swapped.** A predictable name in the user's home isn't safe by itself, so:
-  - The path is walked from the home directory (from the account database, not `$HOME`) one component at a time with `openat(O_DIRECTORY | O_NOFOLLOW)`. No component is ever followed through a symlink. Missing folders are created `0700`.
-  - Every folder on the way (`~`, `Library`, `Application Support`, `MeowDisplay`) must be owned by this user and not group- or world-writable (`fstat` on the open descriptor). So nobody else can replace a component between the checks and the open.
-  - The file is opened with `O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC` and created `0600`. A planted FIFO can't hang the open. Then `fstat` requires a regular file owned by this user with one link. An older build's `0644` file is tightened to `0600`.
-  - There's one location and no fallback. A second location would let two receivers lock different files.
-- **Fails closed.** If the lock can't be used safely (symlink, wrong owner, writable by others, not a regular file, hard link, permission denied, any other error), the receiver **does not start**. It never runs as though it owned the ports. The status says what's wrong and where. It isn't retried by itself; **Try Again** (role settings, or the standalone receiver's settings) checks again after the user fixes it. Turning the role off clears it.
-- **Ports taken by something else** (`ReceiverPortHealth`): the lock is per user, so it can't see a receiver in another login session or an unrelated app. There, the actual bind is the final word. When the media (9001) or pairing (9002) listener fails to bind, the status says which port is in use and what that means ("no Mac can connect", or "new Macs can't pair"). The existing 1-second listener retries continue and end when the receiver stops (a retired receiver never reopens a listener). The message clears itself once the listener is ready. QUIC (UDP 9001) failing alone isn't reported: TCP still carries the session.
-- **Cross-user limitation (accepted):** two macOS accounts logged in at once don't coordinate through the lock. Whichever binds second shows the port-in-use status and waits for the port. MeowDisplay doesn't try to see, stop or work around another user's processes, and has no privileged helper for this.
-  - The receiver's pairing listener now retries a failed bind like its media listener, so pairing comes back once the port frees.
-- **Unchanged:** pairing, TLS 1.3, pinning, per-session input authorization and the wire protocol.
+  其各节属于独立接收端自己，由两个应用共享。角色关闭时，已配对的 Mac 仍会列出并可忘记，而不会把此 Mac 放到网络上。
+- **无自我发现：** 发送端在其发现和配对浏览器中忽略此应用的接收端，接收端在其 Mac 配对浏览器中忽略此应用的发送端（`SameAppPeerFilter`）。
+- **作为显示器时不广播为发送端：** 角色开启时，发送端撤回其 `_opendisplay-mac-pair._tcp` 广播，因此其他接收端的“附近”列表不会向它们提供此 Mac 用于共享。角色关闭时会恢复。
+  - 接收端仅将该广播用于列出和开始配对；重连不依赖它。
+  - 已配对的接收端仍会根据其固定项列出此 Mac。来自它们的连接或远程敲门会被角色门禁拒绝，和以前一样。
+- **窗口与焦点：** 显示窗口存在时，应用是常规应用（Dock、Command-Tab），因此 Command-Tab 始终是退出方式。在此期间更改 Dock/菜单栏设置不会撤销这一点。窗口消失后，它回到用户的呈现方式。
+- **镜像不可用：** 当发送端 Mac 是无头状态且请求了镜像时，设置会打开独立接收端的“使用扩展模式”提议。
+- **关闭后立即重新开启：** 新接收端只在旧接收端释放其监听器和网络服务后才启动。已停止的接收端会被退役：停止前排定的监听器重试无法重新打开端口。
+- **退出：** 显示角色开启时，退出会先发送接收端的 `closing`，与独立接收端一样。
+- **一台 Mac 上两个接收端**（`ReceiverOwnershipLock`）：显示角色和独立接收端都会在打开任何监听器或广播任何内容之前，对 `~/Library/Application Support/MeowDisplay/receiver.lock` 取一个内核 `flock`。两个应用都未沙盒化，因此使用同一个文件。
+  - 无论谁第二个启动、以何种顺序，都不绑定任何东西。它会显示应退出什么，每 2 秒再次检查直到启动或被关闭（`stop()` 取消检查），并在另一个释放后自行启动。
+  - 所有者只在其监听器关闭后才释放锁，并在拥有端口期间始终持有描述符。所有者退出或崩溃时内核会释放它，因此过期锁不会阻塞任何人。释放从不取消链接文件：等待中的接收端必须继续锁定同一文件。
+  - 已发布的 MeowDisplay Receiver 构建早于该锁，因此当任何独立接收端正在运行时（按 bundle id），显示角色也会等待。
+  - 安全上从不需要：同一端口上的第二次绑定会以“address in use”失败，而不是共享它（已测量）。该锁让这种失败变得明确且可恢复，而不是静默重试循环。
+- **锁文件无法被植入或替换。** 用户主目录中的可预测名称本身并不安全，因此：
+  - 路径从主目录（来自账户数据库，而不是 `$HOME`）逐组件遍历，使用 `openat(O_DIRECTORY | O_NOFOLLOW)`。绝不会跟随任何组件穿过符号链接。缺失的文件夹以 `0700` 创建。
+  - 路径上的每个文件夹（`~`、`Library`、`Application Support`、`MeowDisplay`）必须属于此用户，且不可被组或其他用户写入（对打开的描述符执行 `fstat`）。因此没有别人能在检查与打开之间替换某个组件。
+  - 文件以 `O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC` 打开，并以 `0600` 创建。植入的 FIFO 无法挂起打开操作。随后 `fstat` 要求它是一个属于此用户且只有一个链接的常规文件。旧构建的 `0644` 文件会被收紧为 `0600`。
+  - 只有一个位置，没有回退。第二个位置会让两个接收端锁定不同的文件。
+- **安全失败。** 如果锁无法安全使用（符号链接、所有者错误、可被他人写入、不是常规文件、硬链接、权限被拒绝、任何其他错误），接收端**不会启动**。它绝不会像拥有端口那样运行。状态会说明哪里有问题以及位置。它不会自行重试；**重试**（角色设置，或独立接收端的设置）会在用户修复后再次检查。关闭角色会清除它。
+- **端口被其他东西占用**（`ReceiverPortHealth`）：锁是每用户的，因此它看不到另一个登录会话中的接收端或无关应用。在那里，实际绑定才是最终依据。当媒体（9001）或配对（9002）监听器绑定失败时，状态会说明哪个端口被占用及其含义（“没有 Mac 能连接”，或“新 Mac 无法配对”）。现有的 1 秒监听器重试会继续，并在接收端停止时结束（已退役的接收端绝不重新打开监听器）。监听器就绪后消息会自行清除。仅 QUIC（UDP 9001）失败不会被报告：TCP 仍承载会话。
+- **跨用户限制（已接受）：** 同时登录的两个 macOS 账户不会通过锁协调。第二个绑定者会显示端口占用状态并等待端口。MeowDisplay 不会尝试查看、停止或绕过另一个用户的进程，也没有为此设置特权辅助程序。
+  - 接收端的配对监听器现在会像其媒体监听器一样重试失败的绑定，因此端口释放后配对会恢复。
+- **未改变：** 配对、TLS 1.3、固定、每会话输入授权和线路协议。
 
-## Existing users and migration
+## 现有用户与迁移
 
-**Sender (MeowDisplay 1.20.0) users: no migration.** The update arrives
-through the existing `appcast.xml` feed.
-- **Same bundle id and signing team:** existing Screen Recording/Accessibility grants still apply, because TCC keys them to the bundle id and designated requirement. The Keychain group, identity, pins and settings are untouched.
-- **New receiver identity:** the receiver role creates its own identity only the first time the user turns it on.
+**发送端（MeowDisplay 1.20.0）用户：无需迁移。** 更新通过现有
+`appcast.xml` feed 到达。
+- **相同的 bundle id 和签名团队：** 现有的屏幕录制/辅助功能授权仍然适用，因为 TCC 按 bundle id 和指定要求绑定它们。钥匙串组、身份、固定项和设置均未改动。
+- **新的接收端身份：** 接收端角色只在用户第一次开启时创建自己的身份。
 
-**Standalone receiver users:**
-- Nothing is replaced or removed. The receiver's own feed (`appcast-receiver.xml`) keeps updating it, and macOS 12–13 Macs keep using it.
-- On macOS 14+, the unified app's display role is a fresh install of the receiver role: **each sending Mac pairs with it once**. Its identity and pins live in the standalone receiver's Keychain group (`…mac.receiver`). macOS doesn't let another bundle id read that group, and the unified app does not try to.
-- A later, optional migration could add a shared access group to both apps. An updated standalone receiver would then hand its identity over once. That copies a private key between apps, so it needs its own security review; the prototype doesn't do it.
-- Receiver settings are cosmetic and re-set in seconds. They are not imported: they live in the other app's preferences domain.
-- If both are installed on one Mac, only one is a display at a time. The other waits and says what to quit.
+**独立接收端用户：**
+- 不会替换或移除任何东西。接收端自己的 feed（`appcast-receiver.xml`）继续更新它，macOS 12–13 的 Mac 继续使用它。
+- 在 macOS 14+ 上，统一应用的显示角色是接收端角色的全新安装：**每台发送 Mac 都需要与它配对一次**。其身份和固定项位于独立接收端的钥匙串组（`…mac.receiver`）。macOS 不允许另一个 bundle id 读取该组，统一应用也不会尝试。
+- 以后的可选迁移可以给两个应用添加共享访问组。更新后的独立接收端届时可以一次性移交其身份。这会在应用之间复制私钥，因此需要单独的安全审查；原型不这样做。
+- 接收端设置仅影响外观，几秒内即可重设。它们不会被导入：它们位于另一个应用的偏好设置域中。
+- 如果两者安装在同一台 Mac 上，同一时间只有一个作为显示器。另一个会等待并说明应退出什么。
 
-**Release:**
-- **Versions:** one release tag versions both Mac apps, as `release.yml` builds them: the unified app and the standalone receiver ship together as 2.0.0. Each keeps its own bundle id and Sparkle feed (`appcast.xml`, `appcast-receiver.xml`). `CFBundleVersion` must sort above the shipped 1.20.0's `1` (for example `2.0.0`), or Sparkle offers no update.
-- **Release workflow and Fastlane:** they build the same two targets as today. Nothing in `release.yml`, Fastlane or the feeds needs to change for the prototype. Release notes should point macOS 14+ receiver users to the unified app.
+**发布：**
+- **版本：** 一个发布标签为两个 Mac 应用设定版本，由 `release.yml` 构建它们：统一应用和独立接收端作为 2.0.0 一起发布。各自保留自己的 bundle id 和 Sparkle feed（`appcast.xml`、`appcast-receiver.xml`）。`CFBundleVersion` 必须排序高于已发布 1.20.0 的 `1`（例如 `2.0.0`），否则 Sparkle 不会提供更新。
+- **发布工作流和 Fastlane：** 它们像今天一样构建相同的两个目标。原型无需更改 `release.yml`、Fastlane 或 feed 中的任何内容。发布说明应引导 macOS 14+ 接收端用户使用统一应用。
 
-**Rollback:**
-- Downgrading to 1.20.0 is safe. 1.20.0 ignores the receiver-role Keychain items and the `receiverModeEnabled`, `receiver.*` and `installID` settings, and its sender data was never modified.
-- If the role misbehaves after release, ship a sender update with the switch hidden. The receiver-role data stays in its own namespace.
+**回滚：**
+- 降级到 1.20.0 是安全的。1.20.0 忽略接收端角色的钥匙串项和 `receiverModeEnabled`、`receiver.*` 及 `installID` 设置，而其发送端数据从未被修改。
+- 如果角色在发布后行为异常，发布一个隐藏开关的发送端更新。接收端角色数据仍保留在自己的命名空间中。
 
-## Verified (automated, this branch)
+## 已验证（自动化，本分支）
 
-- **macOS suite:** `xcodebuild test -scheme OpenSidecarMac` passes **2002 tests, 0 failures**. That's 1946 on #25's head plus 56 new:
-  - `RolePreferencesIsolationTests` (14): the approval-policy leak in both directions, the receiver role's own default, original key names for existing installs, per-Mac overrides with the same peer id in both roles, role switching and relaunch, both authorization entry points, and per-role endpoint and Wake data. With the keys still shared, 12 of the 14 failed.
-  - `UnifiedMacAppTests` (17):
-    - role transitions, persistence and rapid toggling
-    - the sender's original Keychain names
-    - receiver-role separation, and receiver-only apps unchanged
-    - role-scoped settings keys
-    - same-app discovery filtering
-    - standalone-receiver conflict
-    - sender advertisement withdrawn exactly while a display, through rapid toggling
-    - packaging (bundle id, floor, feed, excludes, standalone receiver at 12.0)
-    - the Dock/Command-Tab rule
-    - the settings page and its search
-    - a guard that the receiver's settings code never uses the sender's trust store or keys
-  - `ReceiverOwnershipTests` (25):
-    - both launch orders, and a receiver without the lock
-    - **a real second process** (`flock(2)` on the same file) in both orders: holding the lock, then exiting normally, being killed with `SIGKILL`, and release and reacquisition (the file is never unlinked)
-    - an existing file reused and tightened to `0600`; a new folder `0700` and file `0600`
-    - refused, without creating anything through it: a symlink at the lock path (dangling or not), a symlinked folder, a hard-linked file, a folder or FIFO at the file's name, a file where a folder belongs, a folder others can write to, an unwritable folder, a folder owned by root, and files and folders of another uid (`fstat` checks)
-    - an unusable lock never lets the receiver start
-    - the status messages for lock problems and taken ports
-    - a port held by another process: the receivers' listener parameters fail with "address in use" and `ReceiverPortHealth` reports it until cleared (an ephemeral port, so a running MeowDisplay isn't disturbed)
-    - retired listeners never reopening, the pairing listener's retry, and a real second bind failing with "address in use"
-- **Builds:** `OpenSidecarMac`, `OpenSidecarMacReceiver` (macOS 12 target) and `OpenSidecariOS` (generic device) all build. The unified bundle has the sender's id, `LSMinimumSystemVersion` 14.0, `LSUIElement`, `MeowDisplayReceiverRoleTrust = separate`, and the receiver code linked in.
-- **Not covered by automation:**
-  - live Keychain isolation (the unsigned test bundle has no Keychain entitlement)
+- **macOS 测试套件：** `xcodebuild test -scheme OpenSidecarMac` 通过 **2002 项测试，0 失败**。这是 #25 最新提交上的 1946 项加上 56 项新增：
+  - `RolePreferencesIsolationTests`（14）：双向的批准策略泄漏、接收端角色自己的默认值、现有安装的原始键名、两个角色中同一对端 id 的每 Mac 覆盖、角色切换和重新启动、两个授权入口点，以及每角色的端点和唤醒数据。在键仍然共享时，14 项中有 12 项失败。
+  - `UnifiedMacAppTests`（17）：
+    - 角色转换、持久化和快速切换
+    - 发送端的原始钥匙串名称
+    - 接收端角色分离，以及仅接收端应用不受影响
+    - 角色作用域设置键
+    - 同应用发现过滤
+    - 独立接收端冲突
+    - 作为显示器期间发送端广播被准确撤回，包括快速切换
+    - 打包（bundle id、下限、feed、排除项、独立接收端为 12.0）
+    - Dock/Command-Tab 规则
+    - 设置页面及其搜索
+    - 一项守卫：接收端的设置代码绝不使用发送端的信任存储或键
+  - `ReceiverOwnershipTests`（25）：
+    - 两种启动顺序，以及没有锁的接收端
+    - **一个真实的第二进程**（对同一文件执行 `flock(2)`）在两种顺序下：持有锁，然后正常退出、被 `SIGKILL` 杀死，以及释放和重新获取（文件从不取消链接）
+    - 现有文件被复用并收紧为 `0600`；新文件夹为 `0700`，文件为 `0600`
+    - 被拒绝，且不通过它创建任何东西：锁路径上的符号链接（无论是否悬空）、符号链接的文件夹、硬链接文件、文件名称处的文件夹或 FIFO、本应是文件夹的位置上的文件、他人可写的文件夹、不可写的文件夹、root 拥有的文件夹，以及其他 uid 的文件和文件夹（`fstat` 检查）
+    - 不可用的锁绝不让接收端启动
+    - 锁问题和端口被占用的状态消息
+    - 被另一个进程占用的端口：接收端的监听器参数会以“address in use”失败，`ReceiverPortHealth` 会报告它直到清除（使用临时端口，因此不会干扰正在运行的 MeowDisplay）
+    - 已退役的监听器绝不重新打开、配对监听器的重试，以及真实的第二次绑定以“address in use”失败
+- **构建：** `OpenSidecarMac`、`OpenSidecarMacReceiver`（macOS 12 目标）和 `OpenSidecariOS`（通用设备）均可构建。统一 bundle 具有发送端的 id、`LSMinimumSystemVersion` 14.0、`LSUIElement`、`MeowDisplayReceiverRoleTrust = separate`，并链接了接收端代码。
+- **自动化未覆盖：**
+  - 实时钥匙串隔离（未签名的测试 bundle 没有钥匙串 entitlement）
   - TCC
-  - Bonjour on a network
-  - window and activation-policy behavior
-  - the receiver restart timing
-  - the two real apps side by side (not launched here, to avoid a second sender next to the running MeowDisplay)
-  - the SwiftUI pages themselves
+  - 网络上的 Bonjour
+  - 窗口和激活策略行为
+  - 接收端重启时机
+  - 两个真实应用并排运行（此处未启动，以免在正在运行的 MeowDisplay 旁再启动一个发送端）
+  - SwiftUI 页面本身
 
-## Physical checklist
+## 物理清单
 
-Needs two signed builds of this branch (Developer ID or team-signed Debug),
-on Mac A (sender) and Mac B (macOS 14+, to be the display). Test #24's
-per-device Mirror/Extend and #25's input on the same builds.
+需要此分支的两个已签名构建（Developer ID 或团队签名的 Debug），在
+Mac A（发送端）和 Mac B（macOS 14+，作为显示器）上。在同一批构建上
+测试 #24 的每设备镜像/扩展和 #25 的输入。
 
-1. **Upgrade in place.** On a Mac running 1.20.0 with paired iPhones, install this build:
-   - devices reconnect without re-pairing
-   - Screen Recording/Accessibility stay granted
-   - "Automatically Allow Connections" and per-device choices are unchanged
-2. **Off by default.** Mac B shows nothing on the network until Use This Mac as a Display is on. Mac A's Devices list never shows Mac A itself, and Mac B's Nearby Macs never shows Mac B.
-   - With Mac B's role on, an iPhone's (or Mac A's receiver) Nearby list no longer shows Mac B as a Mac to share from.
-   - Turn the role off: Mac B appears again, and its paired devices reconnect.
-3. **Pair and stream.** On Mac A, pair with Mac B's display role (one code confirmation), connect, Extend, then Mirror. The window goes full screen, Command-Tab works, and #25's control flow works.
-4. **Approval is per role.** With Mac B's sender "Automatically Allow Connections" on (the default), Mac A's automatic connection to Mac B's display role is **not** admitted silently: Mac B asks, or declines a background attempt. Turn it on in **This Mac as a Display**: Mac A connects without asking, and Mac B's sender setting is unchanged.
-5. **Per-Mac choices are per role.** Block Mac A on the display page. Mac B's sender settings for its devices don't change. Forget Mac A there with the role off, then turn the role on: Mac A must pair again.
-6. **Settings page.**
-   - Rename the display: Mac A's list updates.
-   - Audio on: sound plays on Mac B, and A/V Sync and Resync work.
-   - Reopen Settings after relaunch: all of it is remembered.
-7. **Roles exclusive.** With Mac B's display role on, Mac B's own iPhone doesn't connect to Mac B as a sender. Turning the role off brings the iPhone back without re-pairing.
-8. **Trust separate.** A Mac paired only with Mac B's sender can't stream to Mac B's display role without pairing to it.
-9. **Rapid switching.** Turn the role off and on three times quickly, then connect from Mac A: it pairs or connects normally, with no "address in use" in the log.
-10. **Mirror unavailable.** Close Mac A's lid (on power, with Mac A's display role off), ask for Mirror from Mac B: Settings opens on Mac B with "Use Extend", and Use Extend works.
-11. **Dock and Command-Tab.** In menu-bar-only mode, stream to Mac B: the Dock icon appears and Command-Tab leaves the window. Switch presentation in Settings meanwhile: Command-Tab still works. End the stream: the Dock icon goes away.
-12. **Quit.** Quit Mac B mid-stream: Mac A ends the session rather than redialing.
-13. **Standalone receiver, both orders.**
-    - **Standalone first:** with MeowDisplay Receiver (this branch's build) running on Mac B, turn the role on. It shows "MeowDisplay Receiver is already using this Mac as a display…" and binds nothing (`lsof -i :9001` shows only the standalone receiver). Quit the standalone receiver: within a few seconds the role starts, and Mac A can pair and connect.
-    - **Display role first:** with the role on, open the standalone receiver. Its status says MeowDisplay is using this Mac as a display; Mac A keeps streaming to the role. Turn the role off: the standalone receiver starts by itself and is pairable.
-    - Repeat the first order with an already-released MeowDisplay Receiver: the role waits the same way.
-    - Relaunch MeowDisplay while the standalone receiver runs: the switch stays on and waiting.
-    - **Unsafe lock:** quit both, replace `~/Library/Application Support/MeowDisplay/receiver.lock` with a symlink (`ln -sf /tmp/x …`), turn the role on: it doesn't start, says the file is a symbolic link, and binds nothing. Remove the link, click Try Again: it starts.
-    - **Port taken:** with the standalone receiver running in a second macOS account (fast user switching), turn the role on in the first: the status says port 9001 is in use. Quit the other account's receiver: the role comes up by itself.
-14. **Rollback.** Reinstall 1.20.0 on Mac A: everything works as before.
+1. **就地升级。** 在运行 1.20.0 且已配对 iPhone 的 Mac 上安装此构建：
+   - 设备无需重新配对即可重连
+   - 屏幕录制/辅助功能保持已授权
+   - “自动允许连接”和每设备选择不变
+2. **默认关闭。** 在“将此 Mac 用作显示器”开启之前，Mac B 在网络上不显示任何内容。Mac A 的设备列表绝不显示 Mac A 自身，Mac B 的“附近 Mac”绝不显示 Mac B。
+   - Mac B 角色开启时，iPhone 的（或 Mac A 接收端的）“附近”列表不再把 Mac B 显示为可共享的 Mac。
+   - 关闭角色：Mac B 再次出现，其已配对设备重新连接。
+3. **配对并串流。** 在 Mac A 上，与 Mac B 的显示角色配对（一次验证码确认），连接、扩展，然后镜像。窗口进入全屏，Command-Tab 可用，#25 的控制流程正常工作。
+4. **批准是按角色的。** Mac B 发送端的“自动允许连接”开启（默认）时，Mac A 到 Mac B 显示角色的自动连接**不会**被静默准入：Mac B 会询问，或拒绝后台尝试。在 **将此 Mac 用作显示器** 中开启它：Mac A 无需询问即可连接，且 Mac B 的发送端设置不变。
+5. **每 Mac 选择是按角色的。** 在显示页面上阻止 Mac A。Mac B 对其设备的发送端设置不变。在角色关闭时于那里忘记 Mac A，然后开启角色：Mac A 必须重新配对。
+6. **设置页面。**
+   - 重命名显示器：Mac A 的列表更新。
+   - 开启音频：声音在 Mac B 上播放，音画同步和重新同步正常工作。
+   - 重新启动后重新打开设置：所有内容都被记住。
+7. **角色互斥。** Mac B 的显示角色开启时，Mac B 自己的 iPhone 不会作为发送端连接到 Mac B。关闭角色后 iPhone 无需重新配对即可恢复。
+8. **信任分离。** 只与 Mac B 发送端配对的 Mac，在没有与 Mac B 显示角色配对的情况下无法串流到它。
+9. **快速切换。** 快速关闭并开启角色三次，然后从 Mac A 连接：它正常配对或连接，日志中没有“address in use”。
+10. **镜像不可用。** 合上 Mac A 的盖子（接通电源，Mac A 的显示角色关闭），从 Mac B 请求镜像：设置会在 Mac B 上打开并显示“使用扩展模式”，且“使用扩展模式”可用。
+11. **Dock 和 Command-Tab。** 在仅菜单栏模式下，串流到 Mac B：Dock 图标出现，Command-Tab 可离开窗口。期间在设置中切换呈现方式：Command-Tab 仍然可用。结束串流：Dock 图标消失。
+12. **退出。** 串流中途退出 Mac B：Mac A 结束会话，而不是重拨。
+13. **独立接收端，两种顺序。**
+    - **独立接收端先启动：** 在 Mac B 上运行 MeowDisplay Receiver（此分支的构建）时，开启角色。它显示“MeowDisplay Receiver 已在使用此 Mac 作为显示器…”且不绑定任何东西（`lsof -i :9001` 只显示独立接收端）。退出独立接收端：几秒内角色启动，Mac A 可以配对并连接。
+    - **显示角色先启动：** 角色开启时，打开独立接收端。其状态显示 MeowDisplay 正在使用此 Mac 作为显示器；Mac A 继续串流到该角色。关闭角色：独立接收端自行启动并可配对。
+    - 用已发布的 MeowDisplay Receiver 重复第一种顺序：角色以相同方式等待。
+    - 在独立接收端运行时重新启动 MeowDisplay：开关保持开启并等待。
+    - **不安全的锁：** 退出两者，把 `~/Library/Application Support/MeowDisplay/receiver.lock` 替换为符号链接（`ln -sf /tmp/x …`），开启角色：它不会启动，说明该文件是符号链接，且不绑定任何东西。移除链接，点击“重试”：它启动。
+    - **端口被占用：** 在第二个 macOS 账户（快速用户切换）中运行独立接收端时，在第一个账户中开启角色：状态显示端口 9001 被占用。退出另一个账户的接收端：角色自行启动。
+14. **回滚。** 在 Mac A 上重新安装 1.20.0：一切像以前一样工作。
 
-## Remaining work before release
+## 发布前剩余工作
 
-- **Hardware QA** of the checklist above, with #24 and #25.
-- **String catalog:** the receiver's strings and the new page's strings aren't in MeowDisplay's catalog yet. Xcode adds them on the next IDE build. The catalogs are English-only, so nothing user-visible changes meanwhile.
-- **An already-released MeowDisplay Receiver opened second:** it predates the lock and can't be changed. Its own binds fail, so it doesn't disturb the running display role, and it shows no explanation itself. MeowDisplay notices it opening while the role owns the ports and says so under the role's status ("MeowDisplay Receiver was opened, but this Mac is already a display here…", `StandaloneReceiverConflict.noticeWhileDisplay`), until it quits or the role is turned off. When the role turns off, its media listener takes the ports, while its pairing listener (unlike this branch's) doesn't retry. Updating the standalone receiver to this branch's version fixes both.
-- **Another account or app on ports 9001/9002:** shown as "port in use" and retried every second while the receiver is on. The lock doesn't coordinate accounts (by design, see above).
-- **Optional migration:** the shared-access-group migration for standalone receiver users, if wanted.
+- 对上述清单进行**硬件 QA**，连同 #24 和 #25。
+- **字符串目录：** 接收端的字符串和新页面的字符串尚未进入 MeowDisplay 的目录。Xcode 会在下次 IDE 构建时添加它们。目录目前只有英文，因此在此期间用户可见内容不会变化。
+- **已发布的 MeowDisplay Receiver 第二个打开：** 它早于该锁，无法更改。它自己的绑定会失败，因此不会干扰正在运行的显示角色，且它自身不显示任何解释。MeowDisplay 会注意到它在角色拥有端口时打开，并在角色状态下说明（“MeowDisplay Receiver 已打开，但此 Mac 已在此处作为显示器…”，`StandaloneReceiverConflict.noticeWhileDisplay`），直到它退出或角色关闭。角色关闭时，其媒体监听器会接管端口，而其配对监听器（与本分支不同）不会重试。把独立接收端更新到此分支版本可修复两者。
+- **另一个账户或应用占用端口 9001/9002：** 显示为“端口被占用”，并在接收端开启期间每秒重试。锁不会协调账户（按设计，见上文）。
+- **可选迁移：** 如果需要，为独立接收端用户进行共享访问组迁移。

@@ -1,135 +1,96 @@
-# Mac Receiver input
+# Mac 接收端输入
 
-A Mac running the Mac Receiver has an implemented display **and**
-control-surface role ([open physical-QA tracker #12](https://github.com/raiseCatError/meowdisplay/issues/12)).
-Once the sending Mac allows it, the receiving Mac's local trackpad, mouse
-and keyboard are designed to drive that Mac while the video window is in
-front, in Mirror or Extend.
+运行 Mac 接收端的 Mac 已实现显示**和**控制面角色（[已开启的物理 QA 跟踪项 #12](https://github.com/raiseCatError/meowdisplay/issues/12)）。一旦发送端 Mac 允许，接收端 Mac 的本地触控板、鼠标和键盘就被设计为在视频窗口位于最前面时，在镜像或扩展模式下驱动那台 Mac。
 
-**Verification boundary:** Automated input-forwarding tests and builds
-pass, but the behavior has **not yet been physically verified using two Macs**.
-The steps below describe intended behavior, not a claim that a real two-Mac
-session completed. This outstanding QA is separate from the successfully
-verified multi-device Mirror/Extend feature (#20).
+**验证边界：** 自动化输入转发测试和构建均已通过，但该行为**尚未使用两台 Mac 进行物理验证**。以下步骤描述的是预期行为，并不代表真实的双 Mac 会话已经完成。这项尚未完成的 QA 与已成功验证的多设备镜像/扩展功能（#20）是分开的。
 
-## Using it
+## 使用方法
 
-1. Connect as usual. Every session starts **View Only**.
-2. Click **Request Control** in the video window's titlebar. In full screen,
-   move the pointer to the top of the screen to show the titlebar. The
-   sending Mac asks its owner, or allows it straight away if this device is
-   set to **Always Allow Requests**.
-3. While the titlebar says **Controlling**, the pointer, clicks, scrolling,
-   pinch/rotate and keyboard go to the sending Mac.
-4. To get this Mac back:
-   - **⌃⌥⎋ (Control-Option-Escape)** pauses control. Click the picture to
-     resume; that click only resumes and isn't sent.
-   - Switching to another app or window (Command-Tab, a click outside the
-     window) stops forwarding until the video window is in front again.
-   - **Release** in the titlebar gives control back to the sending Mac. A
-     new request is needed to control it again.
+1. 照常连接。每个会话都以**仅查看**开始。
+2. 在视频窗口的标题栏中点击**请求控制**。在全屏下，将指针移到屏幕顶部以显示标题栏。发送端 Mac 会询问其所有者，如果此设备已设为**始终允许请求**，则会直接允许。
+3. 当标题栏显示**正在控制**时，指针、点击、滚动、捏合/旋转和键盘都会发送到发送端 Mac。
+4. 要收回这台 Mac 的控制：
+   - **⌃⌥⎋ (Control-Option-Escape)** 会暂停控制。点击画面即可恢复；该次点击只用于恢复，不会被发送。
+   - 切换到其他应用或窗口（Command-Tab、点击窗口外部）会停止转发，直到视频窗口再次位于最前面。
+   - 标题栏中的**释放**会把控制权交还给发送端 Mac。若要再次控制，需要重新请求。
 
-The sending Mac can revoke control at any time. Its own Allow Input switch,
-per-device policy and request prompt all work exactly as for an iPhone or
-iPad.
+发送端 Mac 可以随时撤销控制。其自身的允许输入开关、按设备策略和请求提示的工作方式与 iPhone 或 iPad 完全相同。
 
-## What is forwarded
+## 转发的内容
 
-| Input | Sent as | Notes |
+| 输入 | 发送为 | 备注 |
 | --- | --- | --- |
-| Pointer movement | `pointer` `move` (absolute, normalized) | Over the picture only, or anywhere during a drag (clamped to the picture's edge). |
-| Click, double/triple click | `pointer` `down`/`up`, `clickCount` | Left and right (two-finger click, Control-click via the Control modifier). |
-| Drag | `down`, moves, `up` | Released correctly even when the button goes up outside the window. |
-| Scroll | `scroll` (video pixels) | Trackpad precise deltas and momentum; wheel lines ≈ 10 pt. Direction follows **this** Mac's natural-scrolling setting. |
-| Pinch, rotate | `nativeAppGesture` | Full began/changed/ended lifecycle; cancelled if focus is lost. |
-| Keys | `keyboard` `down`/`up` with HID usage | Every key of a full keyboard, F-keys, navigation and keypad. The **sending** Mac's keyboard layout and input method decide the character, as with a keyboard plugged into it. |
-| Key repeat | `keyboard` `down` + `repeat: true` | This Mac's own repeat rate. Needs a sender from this branch; an older sender simply doesn't repeat. |
-| Shift, Control, Option, Command | `keyboard` `modifierDown`/`modifierUp` | Applied to keys, clicks and scrolls on the sending Mac. |
-| Caps Lock | `capsLock` in each key's `modifiers` | Not toggled on the sending Mac. |
+| 指针移动 | `pointer` `move`（绝对坐标，归一化） | 仅在画面上方，或拖动期间在任意位置（限制在画面边缘）。 |
+| 单击、双击/三击 | `pointer` `down`/`up`、`clickCount` | 左键和右键（双指点按、通过 Control 修饰键的 Control-点击）。 |
+| 拖动 | `down`、移动、`up` | 即使按钮在窗口外抬起也能正确释放。 |
+| 滚动 | `scroll`（视频像素） | 触控板的精确增量和惯性；滚轮行数 ≈ 10 pt。方向遵循**这台** Mac 的自然滚动设置。 |
+| 捏合、旋转 | `nativeAppGesture` | 完整的 began/changed/ended 生命周期；失去焦点时取消。 |
+| 按键 | `keyboard` `down`/`up` 带 HID usage | 完整键盘的每个键、F 键、导航键和小键盘。字符由**发送端** Mac 的键盘布局和输入法决定，就像外接键盘一样。 |
+| 按键重复 | `keyboard` `down` + `repeat: true` | 使用这台 Mac 自身的重复速率。需要来自此分支的发送端；较旧的发送端不会重复。 |
+| Shift、Control、Option、Command | `keyboard` `modifierDown`/`modifierUp` | 应用于发送端 Mac 上的按键、点击和滚动。 |
+| Caps Lock | 每个按键 `modifiers` 中的 `capsLock` | 不会在发送端 Mac 上切换。 |
 
-**Not forwarded**:
-- **Middle and other mouse buttons**: the protocol names left and right only.
-- **Fn and Globe-key shortcuts**: macOS turns Fn+arrow into Home/End/Page keys before the app sees it, and those are forwarded.
-- **Three- and four-finger swipes, Mission Control, Launchpad and other trackpad system gestures**: macOS keeps these on this Mac, by design.
-- **Force Touch pressure**, and **text composed by this Mac's input method**: the sending Mac's own input method composes instead.
+**不转发的内容**：
+- **中键和其他鼠标按键**：协议只定义了左键和右键。
+- **Fn 和 Globe 键快捷键**：macOS 会在应用看到之前将 Fn+方向键转换为 Home/End/Page 键，而这些键会被转发。
+- **三指和四指轻扫、Mission Control、Launchpad 及其他触控板系统手势**：macOS 按设计将这些保留在这台 Mac 上。
+- **Force Touch 压力**，以及**由这台 Mac 的输入法组合的文本**：改由发送端 Mac 自身的输入法进行组合。
 
-## What stays on this Mac
+## 保留在这台 Mac 上的内容
 
-Input is never captured globally. Only events macOS delivers to the video
-window while it is in front are looked at (an app-local event monitor scoped
-to that window), so:
+输入绝不会被全局捕获。只查看 macOS 在视频窗口位于最前面时投递给该窗口的事件（一个限定到该窗口的应用本地事件监视器），因此：
 
-- System shortcuts macOS handles before any app — **Command-Tab, Command-Option-Escape (Force Quit), Command-Space, Mission Control, screenshots, Control-Command-Q (Lock Screen)** — always act on this Mac.
-- **⌃⌥⎋** is reserved for pausing and is never sent.
-- While controlling, app shortcuts such as Command-Q, Command-W or Command-, go
-  to the **sending** Mac (it's what typing into that window means). Pause
-  first (⌃⌥⎋) or switch away to use them on this Mac.
-- A modifier still held from before forwarding started (the Command of the
-  Command-Tab that brought the window forward) is never sent, so it can't
-  turn the next key into a shortcut on the sending Mac.
+- macOS 在任何应用之前处理的系统快捷键——**Command-Tab、Command-Option-Escape（强制退出）、Command-Space、Mission Control、截图、Control-Command-Q（锁定屏幕）**——始终作用于这台 Mac。
+- **⌃⌥⎋** 保留用于暂停，且绝不会被发送。
+- 控制期间，Command-Q、Command-W 或 Command-, 等应用快捷键会发往**发送端** Mac（这正是向该窗口输入的含义）。若要在这台 Mac 上使用它们，请先暂停（⌃⌥⎋）或切换离开。
+- 在转发开始前仍按住的修饰键（例如把窗口带到前面的 Command-Tab 中的 Command）绝不会被发送，因此它不会把下一个按键变成发送端 Mac 上的快捷键。
 
-## Never stuck
+## 永不卡键
 
-The receiver remembers every key, modifier, button and gesture it sent down.
-Pausing, focus loss, Release, revocation by the sending Mac and closing the
-window all send the matching releases, then `keyboard` `cancel` as a safety
-net. A disconnect resets locally: the sending Mac releases everything on
-session loss itself (PROTOCOL.md), and a reconnect starts View Only with
-nothing held. The sending Mac ignores input the moment its grant ends,
-whatever a receiver sends.
+接收端会记住它按下的每一个键、修饰键、按钮和手势。暂停、失去焦点、释放、发送端 Mac 撤销以及关闭窗口都会发送对应的释放事件，然后发送 `keyboard` `cancel` 作为安全网。断开连接会在本地重置：发送端 Mac 会在会话丢失时自行释放一切（PROTOCOL.md），而重新连接会以仅查看状态开始，不保留任何按下的内容。无论接收端发送什么，发送端 Mac 在授权结束的那一刻就会忽略输入。
 
-## Pointer feel
+## 指针手感
 
-While controlling, the streamed cursor is drawn at this Mac's pointer
-immediately instead of after a network round trip and a video frame. The
-sending Mac's reported position takes over 0.25 s after local movement stops,
-so the two can't disagree for long (for example when the sending Mac's own
-trackpad moves the cursor).
+控制期间，流式光标会立即绘制在这台 Mac 的指针位置，而不是等待一次网络往返和一帧视频。发送端 Mac 报告的位置会在本地移动停止 0.25 s 后接管，因此两者不会长时间不一致（例如当发送端 Mac 自己的触控板移动光标时）。
 
-## Code
+## 代码
 
-| Piece | Where |
+| 组件 | 位置 |
 | --- | --- |
-| Rules: geometry, key map, forwarding state machine, cursor echo | `MacReceiver/ReceiverInputForwarding.swift` (AppKit-free, unit tested) |
-| AppKit events, window focus, sending, titlebar indicator, hint | `MacReceiver/ReceiverInputController.swift` |
-| Video view event overrides | `ReceiverVideoView` in `MacReceiver/MacReceiver.swift` |
-| Sender: extra HID usages, key repeat, scroll remainder | `Mac/InputRouting.swift`, `Mac/InputInjector.swift` |
+| 规则：几何、键映射、转发状态机、光标回显 | `MacReceiver/ReceiverInputForwarding.swift`（不依赖 AppKit，已单元测试） |
+| AppKit 事件、窗口焦点、发送、标题栏指示器、提示 | `MacReceiver/ReceiverInputController.swift` |
+| 视频视图事件覆盖 | `MacReceiver/MacReceiver.swift` 中的 `ReceiverVideoView` |
+| 发送端：额外 HID usage、按键重复、滚动余量 | `Mac/InputRouting.swift`、`Mac/InputInjector.swift` |
 
-No new wire message exists for any of this. The only addition is the optional
-`repeat` field (PROTOCOL.md section 6.1).
+这些功能都不存在新的 wire 消息。唯一的增加是可选的 `repeat` 字段（PROTOCOL.md 第 6.1 节）。
 
-## Automated coverage
+## 自动化覆盖
 
-`MacTests/ReceiverInputForwardingTests.swift` drives the forwarder with
-synthetic event sequences:
-- **Geometry**: exact fit, letterbox, pillarbox, resize, mixed-resolution full screen, clamped drags.
-- **Key map**: a full round trip through the sender's injection table.
-- **Pointer**: view only by default; request, decline and requests-disabled; old senders; hover; click, drag and release outside; double and right click; letterbox clicks.
-- **Focus and pause**: focus loss mid-drag and mid-pinch; the pause shortcut and click-to-resume; Release.
-- **Keyboard**: modifiers and shortcuts; Command held from Command-Tab; key repeat; Caps Lock.
-- **Session**: revocation mid-typing; disconnect and reconnect with no stale state.
-- **Sender side**: scroll remainder and repeat.
-- **Cost**: a measured per-move decision cost.
+`MacTests/ReceiverInputForwardingTests.swift` 用合成事件序列驱动转发器：
+- **几何**：精确适配、letterbox、pillarbox、调整大小、混合分辨率全屏、限制拖动。
+- **键映射**：通过发送端注入表的完整往返。
+- **指针**：默认仅查看；请求、拒绝和请求被禁用；旧发送端；悬停；点击、拖动和在窗口外释放；双击和右键；letterbox 点击。
+- **焦点与暂停**：拖动中途和捏合中途失去焦点；暂停快捷键和点击恢复；释放。
+- **键盘**：修饰键和快捷键；Command-Tab 中按住的 Command；按键重复；Caps Lock。
+- **会话**：输入中途撤销；断开并重新连接且无残留状态。
+- **发送端**：滚动余量和重复。
+- **成本**：每次移动决策的实测成本。
 
-These prove the receiver's rules and the sender's pure helpers. Nothing here
-posts events into the live system. They do not prove how a physical
-trackpad or keyboard feels, real latency, or the sending Mac's injected
-events in real apps.
+这些证明了接收端的规则和发送端的纯辅助函数。这里没有任何内容会向实时系统投递事件。它们不能证明物理触控板或键盘的手感、真实延迟，或发送端 Mac 在真实应用中注入事件的效果。
 
-## Physical test checklist
+## 物理测试清单
 
-Needs two Macs on the same network, paired, both built from this branch:
-the sender (for example a MacBook Air) and the receiver (an older MacBook).
+需要两台在同一网络上、已配对且均从该分支构建的 Mac：发送端（例如 MacBook Air）和接收端（较旧的 MacBook）。
 
-1. **View Only.** Connect: the titlebar says View Only; moving, clicking and typing in the window do nothing on the sender.
-2. **Request.** Request Control → the sender prompts → Allow: the titlebar says Controlling and the hint names ⌃⌥⎋.
-3. **Pointer, Extend.** Drag a window from the sender onto the receiver's extended desktop. With the receiver's trackpad: move, click, double-click a word, right-click (two fingers and Control-click), drag the window by its title bar and drop it with the button released outside the receiver window.
-4. **Pointer, Mirror.** Same in Mirror; check the cursor lands exactly under the receiver's pointer at all four corners, windowed and full screen.
-5. **Scroll and gestures.** Slow and fast two-finger scrolls (including momentum) in Safari and Finder; the direction matches the receiver's natural-scrolling setting. Pinch-zoom a photo in Preview.
-6. **Keyboard.** Type a sentence with Shift; Command-C/Command-V; hold Delete (repeats); arrows, Home/End, F-keys, Escape; Caps Lock. A non-US layout on the sender types its own characters.
-7. **Local shortcuts.** While controlling: Command-Tab, Command-Space, Mission Control, Command-Shift-4 and Command-Option-Escape act on the receiver.
-8. **Pause and resume.** ⌃⌥⎋ → Paused; typing stays local; click the picture → Controlling again, without a click reaching the sender.
-9. **No stuck keys.** Hold Shift (or a mouse button mid-drag), then Command-Tab away, then check on the sender that nothing is held: typing there is lower-case and no drag continues. Repeat with revoking control on the sender, and with unplugging the network mid-drag.
-10. **Release and revoke.** Release → View Only, nothing reaches the sender. Request again, then revoke from the sender's device settings: input stops immediately.
-11. **Reconnect.** Quit and relaunch the receiver: it starts View Only.
-12. **iPhone/iPad unchanged.** With the same sender, an iPhone's Direct Touch, trackpad mode, keyboard, modifiers and scrolling behave as before. Slow two-finger scrolls should be no worse (the sender now carries the scroll remainder instead of rounding each event).
+1. **仅查看。** 连接：标题栏显示“仅查看”；在窗口中移动、点击和输入对发送端没有任何作用。
+2. **请求。** 请求控制 → 发送端弹出提示 → 允许：标题栏显示“正在控制”，提示中列出 ⌃⌥⎋。
+3. **指针，扩展。** 将窗口从发送端拖到接收端的扩展桌面上。使用接收端的触控板：移动、单击、双击一个单词、右键单击（双指和 Control-点击）、按住窗口标题栏拖动并在接收端窗口外释放按钮放下窗口。
+4. **指针，镜像。** 在镜像模式下重复相同操作；检查在窗口化和全屏下，光标在四个角落都精确落在接收端指针下方。
+5. **滚动和手势。** 在 Safari 和访达中慢速和快速双指滚动（包括惯性）；方向与接收端的自然滚动设置一致。在预览中捏合缩放照片。
+6. **键盘。** 用 Shift 输入一句话；Command-C/Command-V；按住 Delete（重复）；方向键、Home/End、F 键、Escape；Caps Lock。发送端上的非美式布局会输入其自己的字符。
+7. **本地快捷键。** 控制期间：Command-Tab、Command-Space、Mission Control、Command-Shift-4 和 Command-Option-Escape 作用于接收端。
+8. **暂停与恢复。** ⌃⌥⎋ → 已暂停；输入保持在本地；点击画面 → 再次显示“正在控制”，且没有点击到达发送端。
+9. **无卡键。** 按住 Shift（或拖动中途的鼠标按钮），然后 Command-Tab 切换离开，再在发送端检查没有任何按住的键：在那里输入是小写，且没有拖动继续。通过发送端撤销控制、以及拖动中途拔掉网络重复测试。
+10. **释放与撤销。** 释放 → 仅查看，没有任何内容到达发送端。再次请求，然后从发送端的设备设置中撤销：输入立即停止。
+11. **重新连接。** 退出并重新启动接收端：它以仅查看开始。
+12. **iPhone/iPad 保持不变。** 使用同一发送端，iPhone 的直接触控、触控板模式、键盘、修饰键和滚动手感与之前一致。慢速双指滚动不应更差（发送端现在会携带滚动余量，而不是对每个事件四舍五入）。

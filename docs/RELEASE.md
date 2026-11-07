@@ -1,67 +1,46 @@
-# Release process
+# 发布流程
 
-ExtendPad releases contain the Mac apps and Android receiver. Releases are
-built from `release/<version>` branches and promoted to `main` only after the
-required verification and publication gates.
+ExtendPad 发布包含 Mac 应用和 Android 接收端。发布从 `release/<version>` 分支构建，并且只有在通过所需的验证和发布门槛后才会提升到 `main`。
 
-## Versioning
+## 版本管理
 
-`version.txt`, `.release-please-manifest.json` and `CHANGELOG.md` must agree
-with the release branch. Git tags use `vX.Y.Z`; existing tags are never moved.
+`version.txt`、`.release-please-manifest.json` 和 `CHANGELOG.md` 必须与发布分支一致。Git 标签使用 `vX.Y.Z`；现有标签绝不移动。
 
-Android version codes increase monotonically. Mac marketing and build versions
-come from the release configuration. Local builds default to `0.0.0` and are
-not publication artifacts.
+Android version codes 单调递增。Mac 的营销版本和构建版本来自发布配置。本地构建默认为 `0.0.0`，不是发布产物。
 
-## Candidate pipeline
+## 候选流水线
 
-Every push to `release/<version>` runs `.github/workflows/release-candidate.yml`:
+每次推送到 `release/<version>` 都会运行 `.github/workflows/release-candidate.yml`：
 
-1. `plan` validates the branch, version and absence of an existing tag, then
-   records the exact candidate commit.
-2. `mac` builds, signs, notarizes and verifies the sender and receiver DMGs and
-   their update feeds.
-3. `android` runs tests and lint, builds and signs the release bundle, and
-   uploads it to the configured testing track.
-4. `summary` reports readiness without publishing.
+1. `plan` 验证分支、版本以及不存在现有标签，然后记录确切的候选提交。
+2. `mac` 构建、签名、公证并验证发送端和接收端 DMG 及其更新源。
+3. `android` 运行测试和 lint，构建并签名发布包，然后将其上传到配置的测试轨道。
+4. `summary` 报告就绪状态，但不发布。
 
-A newer push cancels the older candidate run. Build and upload jobs do not
-create GitHub releases or tags.
+更新的推送会取消旧的候选运行。构建和上传作业不会创建 GitHub release 或标签。
 
-## Credentials and environments
+## 凭据与环境
 
-Release credentials exist only in their intended protected GitHub
-environments. The workflows use pinned actions and environment checks before
-accessing secrets. Never copy signing or store credentials to repository-level
-secrets for convenience.
+发布凭据只存在于其各自预期的受保护 GitHub 环境中。工作流在访问机密前会使用固定版本的 action 和环境检查。绝不要为了方便而将签名或商店凭据复制到仓库级机密中。
 
-Use `scripts/release/release-secrets.rb status` for a non-disclosing status
-check. `apply-environments.sh` and `apply-rulesets.sh` require explicit
-`--apply` and repository administration rights.
+使用 `scripts/release/release-secrets.rb status` 进行不披露敏感信息的状态检查。`apply-environments.sh` 和 `apply-rulesets.sh` 需要显式的 `--apply` 和仓库管理权限。
 
-Android production requires a production review track and the separate,
-per-version `ANDROID_PRODUCTION_AUTHORIZED` value. Testing tracks are not
-counted as public availability.
+Android 生产发布需要生产审查轨道和单独的、按版本设置的 `ANDROID_PRODUCTION_AUTHORIZED` 值。测试轨道不计为公开可用。
 
-## Publication
+## 发布
 
-`release-publish.yml` is dispatch-only and runs from the matching release
-branch at the reviewed candidate commit. Its ordered stages are:
+`release-publish.yml` 仅支持手动触发，并从匹配的发布分支在已审查的候选提交上运行。其按序阶段为：
 
-1. Verify the candidate and required store state.
-2. Verify the exact Mac artifacts and feeds, create and validate the release,
-   then make it Latest.
-3. Complete authorized Android publication. Managed publishing may require an
-   explicit Play Console Publish action.
-4. Publish the website manifest with only platforms confirmed live.
-5. Propose promotion of the released source to `main`.
-6. Record published or pending state without hiding unfinished work.
+1. 验证候选和所需的商店状态。
+2. 验证确切的 Mac 产物和更新源，创建并验证 release，然后将其设为 Latest。
+3. 完成已授权的 Android 发布。Managed publishing 可能需要执行明确的 Play Console Publish 操作。
+4. 发布网站清单，仅包含已确认上线的平台。
+5. 提议将已发布的源代码提升到 `main`。
+6. 记录已发布或待定状态，而不隐藏未完成的工作。
 
-A resume requires the same publication approval and revalidates the live
-release, artifact hashes and store state. Mac feed verification failure restores
-the previous Latest release rather than leaving a partial update visible.
+恢复需要相同的发布批准，并重新验证线上 release、产物哈希和商店状态。Mac 更新源验证失败时，会恢复之前的 Latest release，而不是留下可见的部分更新。
 
-## Local verification
+## 本地验证
 
 ```sh
 ruby scripts/release/check-release-workflows.rb
@@ -69,12 +48,8 @@ ruby -Iscripts/release/lib -e \
   'Dir["scripts/release/test/*_test.rb"].sort.each { |f| require File.expand_path(f) }'
 ```
 
-Also run the Mac and Android tests and inspect physical-device behavior where
-possible. Do not describe source inspection, automated tests, emulator tests
-and physical QA as interchangeable.
+同时运行 Mac 和 Android 测试，并在可能的情况下检查物理设备行为。不要将源代码审查、自动化测试、模拟器测试和物理 QA 说成可以互换。
 
-## Branch rules
+## 分支规则
 
-See [BRANCHING.md](BRANCHING.md). Development targets `dev`; release fixes go
-to the release branch and are merged back. Published tags and release assets
-are immutable compatibility contracts.
+参见 [BRANCHING.md](BRANCHING.md)。开发以 `dev` 为目标；发布修复进入发布分支并合并回来。已发布的标签和发布资产是不可变的兼容性契约。

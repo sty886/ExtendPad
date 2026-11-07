@@ -1,225 +1,206 @@
-<!-- Sanitized copy of the integration folder's DESIGN-2026-10-30-crash-safe-shield.md (2026-10-31). Local paths and personal names removed; the integration folder holds the original and evidence. -->
+<!-- 集成文件夹中 DESIGN-2026-10-30-crash-safe-shield.md 的脱敏副本（2026-10-31）。本地路径和个人姓名已移除；原件与证据保存在集成文件夹中。 -->
 
-# Crash-safe Privacy Shield: design note (2026-10-30)
+# 崩溃安全的隐私护盾：设计说明（2026-10-30）
 
-Status: design only. Nothing here is built. No privileged helper is proposed: covering screens
-and locking the session need no root.
+状态：仅设计。此处没有任何内容已构建。不提议使用特权助手：遮盖屏幕和锁定会话都不需要 root。
 
-## The weakness
+## 弱点
 
-The cover windows belong to the MeowDisplay process. If it crashes, is force-quit or is killed
-(`kill -9`, a debugger, an out-of-memory kill), the window server removes them at once. The
-device's picture also stops, so nothing leaks to the device. But the Mac's own screens show
-whatever the remote user left open, and the Mac is still logged in and unlocked. That is the
-leak the shield exists to prevent, so the shield is **not crash-safe** today. A normal Quit is
-already handled: it locks the screen before the windows go.
+遮盖窗口属于 MeowDisplay 进程。如果它崩溃、被强制退出或被杀（`kill -9`、调试器、内存不足终止），
+窗口服务器会立即移除这些窗口。设备画面也会停止，因此不会向设备泄露任何内容。但 Mac 自身的屏幕
+会显示远程用户留下的任何内容，而且 Mac 仍处于登录和解锁状态。这正是护盾旨在防止的泄露，因此
+护盾目前**不是崩溃安全的**。正常退出已经处理：它会在窗口消失前锁定屏幕。
 
-What can't be fixed inside one process: no code runs after SIGKILL, and a crash handler can't
-safely draw windows or post events.
+在单进程内无法解决的部分：SIGKILL 之后没有代码运行，崩溃处理器也无法安全地绘制窗口或投递事件。
 
-## Options
+## 方案
 
-### A. Fail-closed marker plus relaunch on abnormal exit (small; no new process)
+### A. 失败关闭标记 + 异常退出后重新启动（小改动；不新增进程）
 
-- While the cover is up or held, keep a marker (UserDefaults or a file in Application Support)
-  saying "covering since T, held until local unlock". Clear it only on a local password unlock,
-  the same moment `held` is cleared now.
-- Register a user LaunchAgent for the app itself with `SMAppService.agent(plistName:)`
-  (`KeepAlive = { SuccessfulExit = false }`), approved by the owner in Login Items. launchd
-  relaunches the app after a crash or kill, not after a normal Quit.
-- At launch, if the marker is set, cover every display and lock the screen before doing
-  anything else (`MacScreenLock.lock`; it needs Accessibility, which the app already has).
-- Exposure window: crash → relaunch → first cover. Probably 0.5–2 s. Measure it; don't assume.
-- Downside: a deliberate Force Quit relaunches the app into a covered, locked state. That is
-  the fail-closed choice, and the owner unlocks with the password.
+- 遮盖层显示或保持期间，保留一个标记（UserDefaults 或 Application Support 中的文件），
+  内容为“自 T 起遮盖，保持到本地解锁”。仅在本地密码解锁时清除，与现在清除 `held`
+  的时刻相同。
+- 用 `SMAppService.agent(plistName:)` 为 App 自身注册一个用户 LaunchAgent
+  （`KeepAlive = { SuccessfulExit = false }`），由所有者在“登录项”中批准。launchd
+  会在崩溃或被杀后重新启动 App，正常退出则不会。
+- 启动时，如果标记已设置，先遮盖每个显示器并锁定屏幕，再执行其他操作
+  （`MacScreenLock.lock`；需要辅助功能权限，App 已有）。
+- 暴露窗口：崩溃 → 重启 → 首次遮盖。可能为 0.5–2 秒。应实际测量，不要假设。
+- 缺点：故意强制退出会让 App 重启后进入遮盖且锁定状态。这是失败关闭的选择，
+  所有者用密码解锁。
 
-### B. A separately maintained shield controller (the supervised design)
+### B. 独立维护的护盾控制器（受监督设计）
 
-- A small helper app bundled in MeowDisplay (Contents/Library/LoginItems), registered as a
-  user LaunchAgent (`SMAppService.agent`, `KeepAlive = true`). It runs as the user, not root.
-- It owns its own pooled cover windows at the shielding level, with `sharingType = .none`.
-  It reports their window IDs to the main app over XPC (`NSXPCConnection`, a Mach service named
-  in the agent plist), so every capture leaves them out, the same as the app's own covers today.
-- While a protected session runs, both processes cover: the app's covers (today's code) and
-  the helper's. If either process dies, the other's covers stay up.
-- The helper watches the main app with `DispatchSource.makeProcessSource(.exit)`. If the app
-  exits while covering and the exit wasn't the normal-Quit handshake, the helper keeps covering
-  and locks the screen. That needs its own Accessibility grant, or it asks the app to do it
-  after the relaunch in A.
-- Unlock happens only in the helper, from this Mac's own input plus the login password (the
-  same rules as `PrivacyShieldPolicy.isPhysical` and `askForLoginPassword`). The main app can
-  ask it to cover, never to uncover. A remote device therefore can't uncover the Mac even
-  through a compromised main app.
-- Costs: a second target and bundle, XPC, an install and approval step, a second Accessibility
-  grant if it locks the screen itself, and tests for the handshake. About a day of work, plus
-  physical checks.
+- 在 MeowDisplay 中捆绑一个小型助手 App（Contents/Library/LoginItems），注册为
+  用户 LaunchAgent（`SMAppService.agent`、`KeepAlive = true`）。它以用户身份运行，而非 root。
+- 它在护盾层级拥有自己的池化遮盖窗口，`sharingType = .none`。它通过 XPC
+  （`NSXPCConnection`，agent plist 中命名的 Mach 服务）向主 App 报告这些窗口 ID，
+  使每次采集都排除它们，与今天 App 自己的遮盖窗口相同。
+- 受保护会话运行期间，两个进程都进行遮盖：App 的遮盖层（今天的代码）和助手的遮盖层。
+  任一进程死亡，另一方的遮盖仍然存在。
+- 助手用 `DispatchSource.makeProcessSource(.exit)` 监视主 App。如果 App 在遮盖期间退出
+  且不是正常退出握手，助手会继续遮盖并锁定屏幕。这需要它自己的辅助功能授权，或者让
+  App 在方案 A 的重启后执行锁定。
+- 解锁只在助手中进行，需来自 Mac 自身的输入加上登录密码（规则与
+  `PrivacyShieldPolicy.isPhysical` 和 `askForLoginPassword` 相同）。主 App 可以请求
+  遮盖，但绝不能请求取消遮盖。因此，即使主 App 被攻破，远程设备也无法取消 Mac 的遮盖。
+- 成本：第二个 target 和 bundle、XPC、安装和批准步骤、若自行锁屏还需第二次辅助功能授权，
+  以及握手测试。约一天工作量，外加物理检查。
 
-## Recommendation
+## 建议
 
-Do A first. It is small, closes the window from "until someone notices" to about a second,
-and needs no new process. Then B if the owner wants protection that also holds while the app
-itself misbehaves. Neither should claim "crash-safe" until a physical check passes.
+先做 A。它改动小，把窗口从“直到有人注意到”缩短到约一秒，且不需要新进程。如果所有者
+需要即使 App 本身行为异常也能保持保护，再做 B。在物理检查通过之前，两者都不应声称
+“崩溃安全”。
 
-## Verification (needs the owner's OK; disposable desktop)
+## 验证（需要所有者确认；可弃置桌面）
 
-1. A disposable test pattern on screen, the shield up, the WindowServer tracer running
-   (evidence/privacy-shield-2026-10-30/), then `kill -9` the Dev app.
-2. Measure the uncovered gap from the trace. Expect 0 for B, and the relaunch time for A.
-3. Also watch the panel itself, with eyes or a camera. The trace is a window-layer check, not a
-   physical-display check.
-4. Repeat for: crash during an active session, crash while held after disconnect, a normal Quit
-   (must lock as today) and Force Quit.
+1. 屏幕上放置可弃置测试图案，开启护盾，运行 WindowServer 跟踪器
+   （evidence/privacy-shield-2026-10-30/），然后对 Dev App 执行 `kill -9`。
+2. 从跟踪记录测量未遮盖的间隙。B 预期为 0，A 为重启时间。
+3. 还要用肉眼或摄像头观察面板本身。跟踪是窗口层检查，不是物理显示器检查。
+4. 对以下情况重复：活动会话期间崩溃、断开后保持遮盖期间崩溃、正常退出
+   （必须像今天一样锁定）和强制退出。
 
-## Option B in detail: the Service Management helper (2026-10-30 evening)
+## 方案 B 详解：Service Management 助手（2026-10-30 晚间）
 
-Investigation only. Nothing is built or installed; installing it needs the owner's separate OK.
+仅为调查。没有任何内容已构建或安装；安装它需要所有者另行确认。
 
-**Packaging and approval (Apple's supported path, no root):**
-- A second, small app target, `MeowDisplay Shield`, inside the main bundle at
-  `Contents/Library/LoginItems/MeowDisplay Shield.app`, plus a launchd property list at
-  `Contents/Library/LaunchAgents/<bundle id>.shield.plist` with `BundleProgram` pointing at it,
-  `MachServices = { <bundle id>.shield = true }` and `KeepAlive = true`. Same team signature and
-  hardened runtime as the main app; no entitlement beyond what a normal app has.
-- Registration: `SMAppService.agent(plistName:).register()` from Settings ▸ Privacy Shield, only
-  after the owner turns on "Keep the shield up if MeowDisplay quits unexpectedly". The status then
-  reads `.requiresApproval` until the owner allows it in System Settings ▸ General ▸ Login Items
-  (`SMAppService.openSystemSettingsLoginItems()` takes them there). The app already uses
-  `SMAppService.mainApp` for Start at Login, so the same status handling applies.
-- Removal: `unregister()` from the same setting, and it is listed in Login Items where the owner
-  can turn it off at any time. Turning it off there must be honoured without nagging.
+**打包与批准（Apple 支持的路径，无需 root）：**
+- 第二个小型 App target，`MeowDisplay Shield`，位于主 bundle 内的
+  `Contents/Library/LoginItems/MeowDisplay Shield.app`，另有一个 launchd 属性列表位于
+  `Contents/Library/LaunchAgents/<bundle id>.shield.plist`，其中 `BundleProgram` 指向它，
+  `MachServices = { <bundle id>.shield = true }` 且 `KeepAlive = true`。与主 App 相同的
+  团队签名和强化运行时；除普通 App 拥有的权限外，无额外 entitlement。
+- 注册：从 设置 ▸ 隐私护盾 调用 `SMAppService.agent(plistName:).register()`，仅在所有者
+  开启“MeowDisplay 意外退出时保持护盾”之后。状态随后显示 `.requiresApproval`，直到
+  所有者在 系统设置 ▸ 通用 ▸ 登录项 中允许（`SMAppService.openSystemSettingsLoginItems()`
+  会带他们到那里）。App 已经使用 `SMAppService.mainApp` 实现登录时启动，因此同样适用该状态处理。
+- 移除：从同一设置调用 `unregister()`；它也会列在“登录项”中，所有者可随时关闭。
+  在这里关闭它必须被尊重，且不得反复提醒。
 
-**Runtime model:**
-- The helper runs as the logged-in user, starts at login, and idles (no windows, no timers)
-  until the main app connects over XPC (`NSXPCConnection(machServiceName:)`). The app checks the
-  helper's code signature on connect (same team ID), and the helper checks the app's.
-- Messages, one direction only for safety: the app may say `cover(displays)` and
-  `sessionEnded`; it can never say "uncover". The helper answers with its cover window IDs so
-  every capture leaves them out, as it does for the app's own covers.
-- While covering, the helper keeps its own pooled windows at the shielding level with
-  `sharingType = .none`, under the app's covers. It watches the app with
-  `DispatchSource.makeProcessSource(identifier:eventMask: .exit)`.
-- If the app exits without the clean-quit handshake while covering, the helper stays up and keeps
-  covering every display, and shows the same Unlock button. launchd relaunches the app if the
-  owner chose that (option A), and the app reconnects and takes over again.
-- If the helper itself dies, launchd restarts it (`KeepAlive`); the app's covers are still up,
-  so one of the two always covers. Both dying at once leaves the Mac uncovered: that is the
-  remaining limit, and Quit locking the screen still applies to a normal Quit.
+**运行时模型：**
+- 助手以登录用户身份运行，在登录时启动，并空闲（无窗口、无计时器），直到主 App 通过 XPC
+  （`NSXPCConnection(machServiceName:)`）连接。App 在连接时检查助手的代码签名（相同团队 ID），
+  助手也检查 App 的签名。
+- 消息，出于安全只允许单向：App 可以发送 `cover(displays)` 和
+  `sessionEnded`；绝不能发送“uncover”。助手以其遮盖窗口 ID 作答，使每次采集都排除它们，
+  正如对待 App 自己的遮盖窗口一样。
+- 遮盖期间，助手在护盾层级用 `sharingType = .none` 保持自己的池化窗口，位于 App 的
+  遮盖层之下。它用 `DispatchSource.makeProcessSource(identifier:eventMask: .exit)` 监视 App。
+- 如果 App 在遮盖期间未完成正常退出握手就退出，助手会保持运行，继续遮盖每个显示器，
+  并显示相同的“解锁”按钮。如果所有者选择了方案 A，launchd 会重新启动 App，
+  App 重新连接并再次接管。
+- 如果助手本身死亡，launchd 会重启它（`KeepAlive`）；App 的遮盖仍在，因此两者总有一方
+  在遮盖。两者同时死亡会让 Mac 失去遮盖：这是剩余限制，正常退出时“退出即锁屏”仍然适用。
 
-**Unlock model (in the helper, never driven remotely):**
-- Only physical input counts (`CGEvent` source PID 0, as `PrivacyShieldPolicy.isPhysical`), and
-  only the login password unlocks: the same `AuthorizationCopyRights` with
-  `kAuthorizationRuleAuthenticateAsSessionUser` the app uses now. No other unlock path, no
-  "uncover" message, no timeout.
-- Recovery if something goes wrong: the owner can always unlock with the password on the Mac;
-  turning the helper off in Login Items stops it; logging out ends it. Nothing needs root.
+**解锁模型（在助手中，绝不远程驱动）：**
+- 只有物理输入才算数（`CGEvent` 源 PID 0，同 `PrivacyShieldPolicy.isPhysical`），
+  且只有登录密码能解锁：与 App 现在使用的 `AuthorizationCopyRights` 加
+  `kAuthorizationRuleAuthenticateAsSessionUser` 相同。没有其他解锁路径，没有“uncover”消息，
+  没有超时。
+- 出问题时的恢复：所有者始终可以在 Mac 上用密码解锁；在“登录项”中关闭助手即可停止它；
+  注销会结束它。不需要 root。
 
-**Tests before any claim:** unit tests for the XPC message rules (no uncover path), the
-clean-quit handshake and window-ID exclusion; then, with the owner's OK and a disposable desktop,
-`kill -9` of the app while covering, a crash during a session, a crash while held, a normal Quit,
-a Force Quit and a helper kill, each watched on the panel and with the window-layer tracer.
-Only after those pass may anything say "crash-safe".
+**任何声明之前的测试：** 针对 XPC 消息规则（无取消遮盖路径）、正常退出握手和窗口 ID
+排除的单元测试；然后在所有者确认并使用可弃置桌面的情况下，对遮盖中的 App 执行
+`kill -9`、会话期间崩溃、保持遮盖期间崩溃、正常退出、强制退出以及杀死助手，每一项都在
+面板上并用窗口层跟踪器观察。只有这些通过后，才能声称“崩溃安全”。
 
-## Prototype results and security model (2026-10-30, night)
+## 原型结果与安全模型（2026-10-30，夜间）
 
-Owner's decision: build and test an isolated prototype; no persistent helper installed or
-registered. Done in `Prototypes/CrashSafeShield/` (commit e3c0297): a policy core with 9 unit
-tests, the keeper (option B), a stand-in for the app, a window-layer tracer and five scenarios.
-Nothing was registered with launchd, nothing is privileged, and SIP and macOS security settings
-are untouched. Evidence: `evidence/crash-safe-prototype-2026-10-30/` (traces and logs).
+所有者的决定：构建并测试一个隔离原型；不安装或注册任何常驻助手。已在
+`Prototypes/CrashSafeShield/` 中完成（提交 e3c0297）：一个带 9 项单元测试的策略核心、
+守护者（方案 B）、App 的替身、窗口层跟踪器和五个场景。没有向 launchd 注册任何内容，
+没有特权，SIP 和 macOS 安全设置均未改动。证据：
+`evidence/crash-safe-prototype-2026-10-30/`（跟踪记录和日志）。
 
-### Measured (window-layer tracer, about 8 ms per sample, one display active)
+### 测量结果（窗口层跟踪器，每样本约 8 ms，单个活动显示器）
 
-| Scenario | Result | Uncovered |
+| 场景 | 结果 | 未遮盖时长 |
 |---|---|---|
-| B1 app `kill -9` while covering | the keeper's cover stayed; it logged "locking" (not performed in the test) | **0** until the test release |
-| B2 app normal Quit while covering | keeper held the cover, no lock | **0** |
-| B3 keeper `kill -9` | the app's own cover stayed | **0** |
-| A1 app `kill -9`, relaunched at once by the script, covers from its marker | | **315 ms**, best case: a tiny process, no launchd delay |
-| B4 keeper main thread hung, then app `kill -9` | the frozen keeper windows still covered; the watchdog fired after 3.0 s, then the keeper exited | open: from then on only the screen lock protects |
+| B1 遮盖期间对 App 执行 `kill -9` | 守护者的遮盖保持；它记录了“正在锁定”（测试中未实际执行） | 直到测试释放前为 **0** |
+| B2 遮盖期间 App 正常退出 | 守护者保持遮盖，未锁定 | **0** |
+| B3 对守护者执行 `kill -9` | App 自身的遮盖保持 | **0** |
+| A1 对 App 执行 `kill -9`，脚本立即重启，从标记恢复遮盖 | | **315 ms**，最佳情况：微型进程，无 launchd 延迟 |
+| B4 守护者主线程挂起，然后对 App 执行 `kill -9` | 冻结的守护者窗口仍在遮盖；看门狗在 3.0 秒后触发，随后守护者退出 | 开放：从那时起只有屏幕锁定提供保护 |
 
-What this means:
-- **A (relaunch)** always leaves a gap. 315 ms is the floor. Add launchd's respawn time and the
-  real app's launch before its first cover. launchd also throttles a job that ran under
-  10 s (`ThrottleInterval`) by up to 10 s. On a crash, the Mac's own screen shows whatever was
-  open for that long.
-- **B (keeper)** kept the screens covered with no measurable gap through an app crash, a normal
-  Quit and a keeper crash. Its weak point is a double failure: the keeper hung *and* the app
-  gone. There the keeper must lock the screen before it lets go.
-- Not yet measured: physical panels (eyes or camera), more than one display (only one was
-  active), sleep/wake while covering, and a display change while covering (the keeper re-covers
-  on screen-parameter changes; untested).
+这意味着：
+- **A（重启）**总会留下间隙。315 ms 是下限。还要加上 launchd 的重启时间和真实 App
+  在首次遮盖前的启动时间。launchd 还会对运行不足 10 秒的任务（`ThrottleInterval`）
+  限流最多 10 秒。崩溃时，Mac 自身的屏幕会在那段时间里显示原本打开的内容。
+- **B（守护者）**在 App 崩溃、正常退出和守护者崩溃期间保持屏幕遮盖，无可测量的间隙。
+  其弱点是双重故障：守护者挂起*且*App 消失。此时守护者必须在放手前锁定屏幕。
+- 尚未测量：物理面板（肉眼或摄像头）、多个显示器（只有一个处于活动状态）、遮盖期间
+  睡眠/唤醒，以及遮盖期间显示器变化（守护者会在屏幕参数变化时重新遮盖；未测试）。
 
-### Security model
+### 安全模型
 
-**Who is protected from what.** The shield hides this Mac's screens from people *at the Mac*
-while a paired device controls it. The remote controller runs as the same macOS user, so it is
-not a security boundary against that person. Same-user processes can always stop each other.
-The macOS lock screen is the boundary: the keeper locks whenever it can't vouch for its cover.
+**谁受到什么保护。** 护盾在已配对设备控制这台 Mac 时，向*身处 Mac 前*的人隐藏其屏幕。
+远程控制者以同一 macOS 用户身份运行，因此它不是针对该人的安全边界。同一用户的进程
+总能互相停止。macOS 锁屏才是边界：守护者一旦无法保证其遮盖，就会锁定。
 
-**Components (production design, nothing privileged):**
-- `MeowDisplay Shield.app` (the keeper), inside the main bundle under
-  `Contents/Library/LoginItems`. It is registered as a **user** LaunchAgent with
-  `SMAppService.agent(plistName:)` and `KeepAlive`. The owner approves it in System Settings ▸
-  General ▸ Login Items and can turn it off there. No root, no daemon, no system extension, no SIP change.
-- Channel: XPC on a Mach service named in the agent plist. Both ends require the other's code
-  signature (`NSXPCConnection.setCodeSigningRequirement`, same team ID and bundle identifier),
-  so another process can't command the keeper or impersonate it. The prototype uses an inherited
-  socket pair instead (only the parent holds the other end), because a Mach service needs the
-  launchd registration that wasn't approved.
+**组件（生产设计，无特权）：**
+- `MeowDisplay Shield.app`（守护者），位于主 bundle 内的
+  `Contents/Library/LoginItems` 下。它以**用户** LaunchAgent 注册，使用
+  `SMAppService.agent(plistName:)` 和 `KeepAlive`。所有者在 系统设置 ▸
+  通用 ▸ 登录项 中批准，并可在那里关闭。无 root、无守护进程、无系统扩展、无 SIP 更改。
+- 通道：agent plist 中命名的 Mach 服务上的 XPC。两端都要求对方的代码签名
+  （`NSXPCConnection.setCodeSigningRequirement`，相同团队 ID 和 bundle 标识符），
+  因此其他进程无法命令守护者或冒充它。原型改用继承的套接字对（只有父进程持有另一端），
+  因为 Mach 服务需要尚未批准的 launchd 注册。
 
-**Rules (enforced in `KeeperPolicy`, unit-tested):**
-1. The app can only say *cover*, *session ended* and *quitting normally* (with the keeper's
-   nonce). There is no uncover message. Unknown or forged messages are logged and ignored.
-2. Uncovering happens only in the keeper. It needs a click from this Mac's own input (event
-   source PID 0) plus the owner's confirmation. That means Touch ID when the Mac has it and the owner
-   allows it (LocalAuthentication `.deviceOwnerAuthentication`, with "Use Password…" on the same
-   sheet; owner request 2026-10-30), otherwise the login password (Authorization Services,
-   `authenticate-session-owner`). There is no timeout and no remote path. The app's own shield
-   does the same since that night (setting: Privacy Shield ▸ Remove With Touch ID, on by default).
-3. The last session ending keeps the cover up (held) until that unlock. This is the same as today.
-4. The app vanishing without the handshake while covering or held: stay covered and lock the
-   screen. A forged handshake (wrong nonce) counts as a crash.
-5. A normal Quit while covering keeps the cover up, without a lock.
-6. Nothing covered and the app gone: the keeper exits.
-7. A hung keeper while covering: the watchdog locks the screen first, then exits.
+**规则（在 `KeeperPolicy` 中强制执行，已单元测试）：**
+1. App 只能发送*遮盖*、*会话结束*和*正常退出*（带守护者的 nonce）。没有取消遮盖消息。
+   未知或伪造消息会被记录并忽略。
+2. 取消遮盖只在守护者中进行。它需要来自 Mac 自身输入的点击（事件源 PID 0）以及
+   所有者的确认。这意味着在 Mac 有 Touch ID 且所有者允许时使用 Touch ID
+   （LocalAuthentication `.deviceOwnerAuthentication`，同一面板上有“使用密码…”；
+   所有者要求于 2026-10-30），否则使用登录密码（Authorization Services，
+   `authenticate-session-owner`）。没有超时，也没有远程路径。App 自身的护盾自当晚起
+   也这样做（设置：隐私护盾 ▸ 使用 Touch ID 移除，默认开启）。
+3. 最后一个会话结束会保持遮盖（held）直到该解锁。这与今天相同。
+4. 遮盖或保持期间 App 未握手就消失：保持遮盖并锁定屏幕。伪造的握手（错误 nonce）
+   视为崩溃。
+5. 遮盖期间正常退出会保持遮盖，但不锁定。
+6. 没有任何遮盖且 App 已消失：守护者退出。
+7. 遮盖期间守护者挂起：看门狗先锁定屏幕，然后退出。
 
-### Failure and recovery
+### 故障与恢复
 
-| Failure | What protects the screen | How the owner gets back in |
+| 故障 | 什么在保护屏幕 | 所有者如何恢复 |
 |---|---|---|
-| App crash, `kill -9`, Force Quit | keeper cover, plus screen lock | password at the lock screen, then Unlock with the password |
-| App hang | both covers stay (frozen app windows still draw) | Unlock in the keeper; Force Quit the app (the keeper keeps covering) |
-| Keeper crash | the app's covers; launchd restarts the keeper; the app re-sends *cover* | none needed |
-| Keeper hang | the app's covers; the watchdog locks and exits; launchd restarts it | password at the lock screen |
-| Both gone | the lock, if the keeper locked first; otherwise **nothing** | — (remaining limit) |
-| Normal Quit while covering | the keeper's held cover (the app also locks today) | Unlock with the password |
-| Unlock prompt fails | cover stays (fail closed) | log out (⌥⇧⌘Q) or restart; both end the session safely |
-| Owner turns the keeper off in Login Items | the app's covers while it runs | — (owner's choice) |
-| Log out, restart, shut down | session ends, nothing to show | normal login |
+| App 崩溃、`kill -9`、强制退出 | 守护者遮盖，加上屏幕锁定 | 在锁屏输入密码，然后用密码解锁 |
+| App 挂起 | 两个遮盖都保持（冻结的 App 窗口仍会绘制） | 在守护者中解锁；强制退出 App（守护者继续遮盖） |
+| 守护者崩溃 | App 的遮盖；launchd 重启守护者；App 重新发送*遮盖* | 无需操作 |
+| 守护者挂起 | App 的遮盖；看门狗锁定并退出；launchd 重启它 | 在锁屏输入密码 |
+| 两者都消失 | 如果守护者先锁定，则有锁定；否则**什么都没有** | —（剩余限制） |
+| 遮盖期间正常退出 | 守护者保持的遮盖（App 今天也会锁定） | 用密码解锁 |
+| 解锁提示失败 | 遮盖保持（失败关闭） | 注销（⌥⇧⌘Q）或重启；两者都会安全结束会话 |
+| 所有者在登录项中关闭守护者 | App 运行期间的遮盖 | —（所有者的选择） |
+| 注销、重启、关机 | 会话结束，无内容可显示 | 正常登录 |
 
-**Orphaned covers.** A cover can only exist while the keeper also shows its Unlock control, or
-while its frozen windows are counted down by the watchdog (3 s, then lock and exit). The keeper
-exits by itself when nothing is covered and the app is gone, and after an unlock with no app.
-Logging out or restarting always clears it. So a held cover is never left without a way out
-except the password, which is the point.
+**孤立遮盖。** 遮盖只能存在于以下情况：守护者同时显示其“解锁”控件，或其冻结窗口
+正由看门狗倒计时（3 秒，然后锁定并退出）。当没有任何遮盖且 App 已消失时，以及在没有
+App 的情况下解锁后，守护者会自行退出。注销或重启总会清除它。因此，保持的遮盖绝不会
+没有出路——除了密码，而这正是重点。
 
-**Open before production:**
-- The keeper locking the screen needs its own "post events" permission (Accessibility).
-  Without it the lock in rules 4 and 7 does nothing; the prototype logs this. The alternative
-  is to make the cover the only protection and accept the double-failure limit.
-- Re-covering on display changes and sleep/wake needs a physical test.
-- XPC with code-signing requirements replaces the socket pair. Test a wrong-signature client.
-- A physical check with eyes or a camera: `kill -9` of the real app while covering, Force Quit,
-  a keeper kill, normal Quit, and two displays.
+**生产前待解决：**
+- 守护者锁定屏幕需要自己的“投递事件”权限（辅助功能）。没有它，规则 4 和 7 中的锁定
+  不会生效；原型会记录这一点。替代方案是让遮盖成为唯一保护，并接受双重故障限制。
+- 显示器变化和睡眠/唤醒时的重新遮盖需要物理测试。
+- 带代码签名要求的 XPC 将取代套接字对。测试错误签名的客户端。
+- 用肉眼或摄像头进行物理检查：遮盖期间对真实 App 执行 `kill -9`、强制退出、
+  杀死守护者、正常退出，以及双显示器。
 
-### Recommendation and what approval would cover
+### 建议及批准涵盖的内容
 
-Use **B**, with the app also keeping today's lock-on-Quit and a fail-closed marker (A's
-marker, not its relaunch) for the double-failure case. Approval would mean:
-1. Adding the keeper target to the app (a few hundred lines, mostly from this prototype).
-2. Registering it as a user LaunchAgent with `SMAppService.agent` from a Privacy Shield setting
-   that is off by default. It would be listed in Login Items and removable by the owner.
-3. The owner granting it Accessibility, only if it should lock the screen itself.
+采用 **B**，同时让 App 保留今天的退出即锁定，以及为双重故障情况保留失败关闭标记
+（A 的标记，而非其重启）。批准意味着：
+1. 将守护者 target 加入 App（几百行代码，主要来自本原型）。
+2. 通过一个默认关闭的隐私护盾设置，用 `SMAppService.agent` 将其注册为用户 LaunchAgent。
+   它会列在“登录项”中，所有者可移除。
+3. 所有者授予其辅助功能权限，仅在它需要自行锁定屏幕时。
 
-No step needs root, a privileged helper, a system extension or a SIP change. Until those
-physical checks pass, nothing may say "crash-safe".
+任何步骤都不需要 root、特权助手、系统扩展或 SIP 更改。在这些物理检查通过之前，
+不得声称“崩溃安全”。

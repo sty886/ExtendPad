@@ -1,34 +1,18 @@
-# Remote wake-on-LAN — relay design (relay not yet implemented)
+# 远程唤醒局域网（Wake-on-LAN）— 中继设计（中继尚未实现）
 
-This is a local design note for the Tailscale Remote milestone. It is
-intentionally not an upstream project document.
+这是一份针对 Tailscale 远程里程碑的本地设计说明。它有意不作为上游项目文档。
 
-## Current status
+## 当前状态
 
-**Wake & Connect ships, but only on the Mac's local network.** The receiver
-learns a paired Mac's MAC and broadcast address over an already-authenticated
-session (`WakeMetadata` in `Shared/WakeOnLAN.swift`), then
-`Shared/WakeConnectCoordinator.swift` sends a standard Wake-on-LAN UDP
-broadcast, asks the Mac to connect, and requests Promote Interactive Wake.
-The attempt only succeeds once the pinned, mutually authenticated TLS peer
-matches the target Mac. It requires Wake for Network Access on the Mac, is
-for a logged-in Mac that is asleep or locked, and does not cover cold boot.
+**唤醒并连接已发布，但仅限 Mac 的本地网络。** 接收端通过一个已经过认证的会话获知一台已配对 Mac 的 MAC 地址和广播地址（`Shared/WakeOnLAN.swift` 中的 `WakeMetadata`），随后 `Shared/WakeConnectCoordinator.swift` 发送标准的 Wake-on-LAN UDP 广播，请求 Mac 连接，并请求提升为交互式唤醒。只有当固定且双向认证的 TLS 对端与目标 Mac 匹配时，该尝试才会成功。它要求 Mac 启用“网络访问唤醒”，适用于已登录且处于睡眠或锁定状态的 Mac，不覆盖冷启动。
 
-**The relay described below is still not implemented.** The magic packet is
-never routed over Remote/Tailscale, so a Mac asleep on another network
-cannot be woken from outside it. Remote connectivity to an already-awake Mac
-works independently of this.
+**下文描述的中继仍未实现。** 魔法包永远不会通过 Remote/Tailscale 路由，因此无法从外部唤醒位于另一个网络上的睡眠 Mac。对已唤醒 Mac 的远程连接与此无关，可独立工作。
 
-## Why this is hard
+## 为什么这很难
 
-Tailscale gives the iPhone routed IP connectivity to the Mac's tailnet
-address, but that's an overlay-network path, not a LAN segment. Traditional
-Wake-on-LAN is a Layer-2 broadcast (or unicast) magic packet delivered on
-the Mac's *local* Ethernet/Wi-Fi segment. A tailnet peer cannot emit that
-packet directly — it isn't on the same broadcast domain, and Tailscale
-doesn't bridge Layer 2 by default.
+Tailscale 让 iPhone 获得通往 Mac tailnet 地址的路由 IP 连接，但那是叠加网络路径，而不是 LAN 网段。传统的 Wake-on-LAN 是在 Mac 的*本地*以太网/Wi-Fi 网段上传递的二层广播（或单播）魔法包。tailnet 对端无法直接发出该数据包——它不在同一个广播域中，而且 Tailscale 默认不桥接二层。
 
-## Model
+## 模型
 
 ```
 iPhone
@@ -39,26 +23,16 @@ iPhone
   → MEOW's normal Remote reconnect takes over from here
 ```
 
-The relay is any always-on device already on the Mac's home network and
-enrolled in the same tailnet: a Raspberry Pi, a NAS, another Mac, or
-possibly the router — but a router integration is deferred pending
-investigation into whether the user's hardware (e.g. a TP-Link Archer
-AX5400/AX73-class device) exposes a safe, stable, authenticated mechanism
-for it. No such mechanism should be assumed without verification.
+中继可以是任何已经接入 Mac 家庭网络并注册到同一 tailnet 的常开设备：树莓派、NAS、另一台 Mac，或者可能是路由器——但路由器集成被推迟，需先调查用户硬件（例如 TP-Link Archer AX5400/AX73 级别的设备）是否提供安全、稳定且经过认证的机制。在验证之前，不应假定存在此类机制。
 
-## Hard constraints for any future implementation
+## 未来任何实现的硬性约束
 
-- The relay must only wake MEOW devices the user has explicitly enrolled
-  (their own paired Mac's MAC address), never an arbitrary host supplied by
-  the phone at request time.
-- No public UDP WoL port. The relay only accepts wake requests from
-  authenticated tailnet peers.
-- No general remote-command execution surface — the relay's only exposed
-  action is "send this one pre-configured magic packet."
-- Waking is best-effort: sleep → wake is the supported case. Cold boot from
-  a fully powered-off Mac is out of scope and must not be promised.
+- 中继只能唤醒用户显式登记过的 MEOW 设备（其自己已配对 Mac 的 MAC 地址），绝不能唤醒手机在请求时提供的任意主机。
+- 不开放公共 UDP WoL 端口。中继只接受来自已认证 tailnet 对端的唤醒请求。
+- 不提供通用的远程命令执行面——中继唯一暴露的动作是“发送这一个预先配置好的魔法包”。
+- 唤醒是尽力而为的：支持的情况是睡眠 → 唤醒。完全关机的 Mac 的冷启动不在范围内，且不得作出承诺。
 
-## Desired eventual UI states
+## 期望的最终 UI 状态
 
 ```
 Awake/reachable   → Connect
@@ -66,17 +40,8 @@ Asleep/wakeable   → Wake
 Offline/no relay  → Offline
 ```
 
-These relay-backed states are not wired up. `ConnectionRoute` and the
-Remote candidate/connect path have no dependency on wake state; they simply
-fail with a clear "peer unreachable" / "Mac asleep" diagnostic (see Phase 7
-of the Remote milestone) when the Mac isn't reachable, exactly as they
-would for any other unreachable route.
+这些由中继支撑的状态尚未接入。`ConnectionRoute` 以及远程候选/连接路径不依赖唤醒状态；当 Mac 不可达时，它们只会以清晰的“peer unreachable”/“Mac asleep”诊断失败（参见远程里程碑的第 7 阶段），与任何其他不可达路由的情况完全相同。
 
-## Why the relay is not implemented yet
+## 为什么中继尚未实现
 
-Building the relay (protocol, enrollment, auth, and where it runs) is a
-separate piece of always-on infrastructure with its own security surface.
-Bundling it into the first Remote-connectivity milestone would risk
-destabilizing the core "phone reaches an already-awake Mac over Tailscale"
-path this milestone is actually validating. It's scoped out deliberately,
-not overlooked.
+构建中继（协议、登记、认证以及运行位置）是一块独立的常开基础设施，具有自身的安全面。将其并入第一个远程连接里程碑，可能会破坏该里程碑实际要验证的核心路径：“手机通过 Tailscale 到达已唤醒的 Mac”。这是有意划出范围的，而不是疏忽。

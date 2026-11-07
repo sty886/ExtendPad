@@ -1,203 +1,92 @@
-# Technical Notes
+# 技术说明
 
-Platform research and architectural constraints behind MeowDisplay's
-roadmap. This is not a marketing page — it's the working reference for *why*
-certain roadmap items (headless support, cold boot, remote wake) are shaped
-the way they are, and what external prior art informed that shape.
+MeowDisplay 路线图背后的平台研究和架构约束。这不是营销页面——它是工作参考，说明了*为什么*某些路线图项目（无头支持、冷启动、远程唤醒）会以现在的方式设计，以及哪些外部先例影响了这种设计。
 
-For the product-level overview, see [README.md](../README.md). For the wire
-protocol, see [PROTOCOL.md](PROTOCOL.md).
+产品层面的概述见 [README.md](../README.md)。wire 协议见 [PROTOCOL.md](PROTOCOL.md)。
 
-## macOS capture and display architecture
+## macOS 采集与显示架构
 
-MeowDisplay's Mac sender captures with **ScreenCaptureKit**, Apple's modern,
-public, supported screen-capture API, and hardware-encodes the result to
-H.264 with **VideoToolbox**. Both are public APIs with normal App Review /
-distribution status — there is nothing private about the capture or encode
-path.
+MeowDisplay 的 Mac 发送端使用 **ScreenCaptureKit**（Apple 现代、公开且受支持的屏幕采集 API）进行采集，并用 **VideoToolbox** 将结果硬件编码为 H.264。两者都是公开 API，具有正常的 App Review / 分发状态——采集或编码路径没有任何私有内容。
 
-The part that *is* private is creating the virtual display in the first
-place; see the next section.
+真正*属于*私有的是首先创建虚拟显示；见下一节。
 
-## Virtual displays and `CGVirtualDisplay`
+## 虚拟显示与 `CGVirtualDisplay`
 
-To offer a true **extended** display (not a mirror), the Mac sender needs to
-create a display that doesn't physically exist. Apple has no public,
-supported third-party API for that today. MeowDisplay uses the private
-`CGVirtualDisplay` SPI to do it — the same technique used by other
-virtual-display tools such as BetterDisplay and DeskPad.
+要提供真正的**扩展**显示（而非镜像），Mac 发送端需要创建一个物理上不存在的显示器。Apple 目前没有公开、受支持的第三方 API 可以做到这一点。MeowDisplay 使用私有的 `CGVirtualDisplay` SPI 来实现——这与 BetterDisplay、DeskPad 等其他虚拟显示工具使用的技术相同。
 
-This is used deliberately and knowingly, not accidentally:
+这是有意且有意识的使用，而非意外：
 
-- The private-API surface is **isolated to one place** in the codebase
-  (`Mac/VirtualDisplay.swift`), rather than spread through the app, so it can
-  be swapped without a wider rewrite.
-- Private APIs carry real compatibility and distribution risk: Apple can
-  change or remove them without notice, and their use is a factor in Mac App
-  Store review (though not in notarized direct distribution, which is
-  MeowDisplay's actual near-term target — see [README.md](../README.md#getting-started)).
-- If Apple ever exposes a supported public equivalent, MeowDisplay should
-  and would switch to it.
+- 私有 API 表面**隔离在代码库中的一个位置**（`Mac/VirtualDisplay.swift`），而不是散布在整个应用中，因此可以在不进行大范围重写的情况下替换。
+- 私有 API 带有真实的兼容性和分发风险：Apple 可以不事先通知就更改或移除它们，其使用也是 Mac App Store 审查的一个因素（尽管在公证的直接分发中不是——那是 MeowDisplay 实际的近期目标——见 [README.md](../README.md#getting-started)）。
+- 如果 Apple 有一天提供受支持的公开等效方案，MeowDisplay 应该并且会切换到它。
 
-**Context, not a workaround for it:** Apple's own [Screen Sharing feature](https://support.apple.com/en-in/guide/mac-help/-mh14066/mac)
-lets a Mac view and control another Mac's screen over the network, including
-a high-performance mode. That's real evidence Apple can do host-side virtual
-display work internally — it is **not** evidence that a public third-party
-API for equivalent host virtual-display creation exists or is coming. Do not
-read one as implying the other.
+**背景说明，而非绕过它的方法：** Apple 自己的[屏幕共享功能](https://support.apple.com/en-in/guide/mac-help/-mh14066/mac)允许一台 Mac 通过网络查看并控制另一台 Mac 的屏幕，包括高性能模式。这是 Apple 能够在内部进行主机端虚拟显示工作的真实证据——这**不是**存在或即将出现用于等效主机虚拟显示创建的公开第三方 API 的证据。不要把前者理解为暗示后者。
 
-## Sleep/lock vs. cold boot
+## 睡眠/锁定与冷启动
 
-This distinction matters and is easy to blur, so it's worth stating plainly.
+这一区别很重要，而且容易被混淆，因此值得明确说明。
 
-**Current / near-term model:** MeowDisplay targets a Mac with an existing,
-**logged-in Aqua user session** that sleeps or locks. Wake, reconnect,
-capture recovery, and remote input are being built and validated around
-*that* lifecycle — a session that already exists and is coming back, not one
-being created from nothing.
+**当前/近期模型：** MeowDisplay 面向具有现有、**已登录 Aqua 用户会话**并进入睡眠或锁定的 Mac。唤醒、重新连接、采集恢复和远程输入都围绕*那个*生命周期构建和验证——一个已经存在并正在恢复的会话，而不是从无到有创建的会话。
 
-**Future, different problem: cold boot / fully logged-out access.** Reaching
-a Mac that is fully powered off, or sitting at the LoginWindow with nobody
-signed in, is architecturally distinct — screen capture and input injection
-both need a GUI session to operate in, and a machine in that state has none
-yet. This is **not** required for MeowDisplay's first public beta.
+**未来的不同问题：冷启动 / 完全登出访问。** 访问一台完全关机，或停在 LoginWindow 且无人登录的 Mac，在架构上是不同的——屏幕采集和输入注入都需要在 GUI 会话中运行，而处于该状态的机器还没有 GUI 会话。这**不是** MeowDisplay 首个公开 beta 所必需的。
 
-An [Apple Developer Forums thread](https://developer.apple.com/forums/thread/814152)
-(a developer asking how to capture the LoginWindow screen for a remote
-support tool, answered directly by an Apple DTS engineer) is useful prior
-art here. The documented shape, per that answer:
+一个 [Apple Developer Forums 帖子](https://developer.apple.com/forums/thread/814152)（一位开发者询问如何为远程支持工具采集 LoginWindow 屏幕，由 Apple DTS 工程师直接回答）在这里是有用的先例。根据该回答，所记录的形态是：
 
-- A **machine-level LaunchDaemon** handles networking/orchestration in the
-  global system session — daemons cannot do GUI work like screen capture.
-- A **GUI-session LaunchAgent** (configurable via `LimitLoadToSessionType`
-  to load in `Aqua` and/or `LoginWindow` sessions) does the actual
-  ScreenCaptureKit capture and input injection, because that has to happen
-  inside a GUI session, not a background daemon.
-- The two communicate over **XPC**.
-- Per that same thread, ScreenCaptureKit capture in the **LoginWindow**
-  session specifically became possible starting **macOS 14.4** (earlier
-  versions need legacy APIs like `CGDisplayStream` there instead).
+- **机器级 LaunchDaemon** 在全局系统会话中处理网络/编排——守护进程无法进行屏幕采集之类的 GUI 工作。
+- **GUI 会话 LaunchAgent**（可通过 `LimitLoadToSessionType` 配置为在 `Aqua` 和/或 `LoginWindow` 会话中加载）执行实际的 ScreenCaptureKit 采集和输入注入，因为这必须发生在 GUI 会话内，而不是后台守护进程中。
+- 两者通过 **XPC** 通信。
+- 根据同一帖子，**LoginWindow** 会话中的 ScreenCaptureKit 采集从 **macOS 14.4** 开始才成为可能（更早版本在那里需要使用 `CGDisplayStream` 等旧 API）。
 
-This is recorded as the likely shape of a future cold-boot architecture, not
-a commitment to build it on any particular timeline.
+这被记录为未来冷启动架构的可能形态，而不是承诺按任何特定时间表构建它。
 
-## Persistent remote capture / Apple's own capability
+## 持久远程采集 / Apple 自身的能力
 
-Apple has a restricted, approval-gated entitlement —
-[`com.apple.developer.persistent-content-capture`](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.persistent-content-capture) —
-relevant to apps that need to keep capturing content (e.g. screen content)
-persistently, including in scenarios an ordinary screen-recording permission
-grant doesn't cover. Apple's own [request form](https://developer.apple.com/contact/request/persistent-content-capture/)
-(sign-in gated, as Apple's developer request forms generally are) is where a
-developer would apply for it.
+Apple 有一项受限的、需审批的 entitlement——[`com.apple.developer.persistent-content-capture`](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.persistent-content-capture)——适用于需要持续采集内容（例如屏幕内容）的应用，包括普通屏幕录制权限授予无法覆盖的场景。开发者可以在 Apple 自己的[请求表单](https://developer.apple.com/contact/request/persistent-content-capture/)（需要登录，正如 Apple 的开发者请求表单通常那样）上申请它。
 
-**MeowDisplay does not currently hold, or claim to hold, approval for this
-entitlement.** It's recorded here because it's directly relevant to any
-future persistent/unattended remote-desktop work — one path worth knowing
-about, not something in use today.
+**MeowDisplay 目前不持有、也不声称持有该 entitlement 的批准。** 之所以记录在这里，是因为它与任何未来的持久/无人值守远程桌面工作直接相关——是一条值得了解的路径，而非今天正在使用的东西。
 
-## Remote Desktop privacy model
+## 远程桌面隐私模型
 
-A separate [Apple Developer Forums thread](https://developer.apple.com/forums/thread/841530)
-covers a related, narrower question: whether an app can silently *check*
-macOS's "Remote Desktop" TCC (privacy) permission status without itself
-triggering a system consent prompt. Per the Apple DTS engineer's reply in
-that thread (as of that post): no public API exposes that check today —
-`CGPreflightScreenCaptureAccess()` only reflects the separate "Screen &
-System Audio Recording" permission, and calling ScreenCaptureKit to find out
-triggers the very consent alert you were trying to avoid. The engineer's
-suggestion was to file an enhancement request (feedback number `FB24263354`
-is attached to that specific thread).
+另一个 [Apple Developer Forums 帖子](https://developer.apple.com/forums/thread/841530)涵盖了一个相关但更窄的问题：应用能否在不触发系统同意提示的情况下静默*检查* macOS 的“Remote Desktop”TCC（隐私）权限状态。根据该帖子中 Apple DTS 工程师的回复（截至该帖发布时）：目前没有公开 API 暴露该检查——`CGPreflightScreenCaptureAccess()` 只反映单独的“Screen & System Audio Recording”权限，而调用 ScreenCaptureKit 来查明会触发你正试图避免的那个同意弹窗。工程师的建议是提交一个增强请求（反馈编号 `FB24263354` 附在该特定帖子中）。
 
-Treat this as one forum thread's observation at one point in time, not a
-documented, guaranteed platform behavior — Apple's own docs are the
-authority if this ever needs to be relied on for real.
+请将此视为某个论坛帖子在某一时间点的观察，而不是有文档记录的、有保证的平台行为——如果这将来需要被实际依赖，Apple 自己的文档才是权威。
 
-## Remote Wake-on-LAN
+## 远程 Wake-on-LAN
 
-Wake-on-LAN is fundamentally **local-link-layer** behavior: a magic packet
-broadcast on a LAN segment, received by a network interface that's still
-listening even though the rest of the machine is asleep. A Tailscale (or
-similar overlay-network) link on a *sleeping* Mac is not itself an always-on
-listener in the way LAN hardware WoL is — the Mac has to already be awake
-for its Tailscale node to be reachable at all. So "send a WoL packet over
-Tailscale to a sleeping Mac" doesn't have a straightforward implementation:
-there's no awake process on the target to receive and act on an overlay
-packet.
+Wake-on-LAN 本质上是**本地链路层**行为：在 LAN 网段上广播的魔法包，由仍在监听的网络接口接收，即使机器其余部分已睡眠。*睡眠* Mac 上的 Tailscale（或类似叠加网络）链路本身并不是 LAN 硬件 WoL 那种常开监听器——Mac 必须先处于唤醒状态，其 Tailscale 节点才能被访问。因此“通过 Tailscale 向睡眠 Mac 发送 WoL 包”没有直接了当的实现：目标上没有已唤醒的进程来接收并处理叠加网络数据包。
 
-The practical shape of remote wake today, where it works, generally needs an
-**already-awake relay on the target's own LAN**: something else on that
-network — a router feature, or another always-on device — sends the actual
-link-layer WoL broadcast, the Mac wakes, and *then* its overlay network link
-comes back and MeowDisplay can connect. [AnyDesk documents this same shape](https://support.anydesk.com/)
-for its own Wake-on-LAN feature: it can use another online AnyDesk
-client/device already on the target's LAN as the relay that sends the wake
-packet. (AnyDesk's specific Wake-on-LAN help-center URL could not be
-resolved to a stable page at the time of writing — this describes the
-documented general mechanism, referenced conceptually, not a specific
-quoted page.)
+如今远程唤醒在可行的场景中的实际形态，通常需要在**目标自己的 LAN 上有一个已唤醒的中继**：该网络上的其他东西——路由器功能或另一台常开设备——发送实际的链路层 WoL 广播，Mac 唤醒，*然后*其叠加网络链路恢复，MeowDisplay 才能连接。[AnyDesk 记录了同样的形态](https://support.anydesk.com/)用于其自己的 Wake-on-LAN 功能：它可以使用目标 LAN 上已有的另一个在线 AnyDesk 客户端/设备作为中继来发送唤醒包。（AnyDesk 具体的 Wake-on-LAN 帮助中心 URL 在撰写时无法解析为稳定页面——这里描述的是有文档记录的通用机制，仅作概念性参考，并非引用特定页面。）
 
-An integrated remote-WoL relay/router solution for MeowDisplay is **future**
-work, not planned for the near term — see [README.md](../README.md#roadmap).
+面向 MeowDisplay 的集成式远程 WoL 中继/路由解决方案是**未来**工作，近期没有计划——见 [README.md](../README.md#roadmap)。
 
-## Reference implementations / related research
+## 参考实现 / 相关研究
 
-These are architectural references consulted for context — not
-dependencies, and not claims that MeowDisplay copies their code or that they
-endorse MeowDisplay.
+这些是为获取背景而查阅的架构参考——不是依赖项，也不表示 MeowDisplay 复制了它们的代码，或它们为 MeowDisplay 背书。
 
 ### RustDesk
 
-[RustDesk](https://github.com/rustdesk) is an open-source remote-desktop
-project with real-world macOS unattended-access deployment experience.
-Useful references:
+[RustDesk](https://github.com/rustdesk) 是一个开源远程桌面项目，拥有真实世界的 macOS 无人值守访问部署经验。有用的参考：
 
-- A [GitHub discussion](https://github.com/rustdesk/rustdesk/discussions/7762)
-  on configuring the macOS client to start automatically at boot, including
-  at the login screen, for unattended access — LaunchDaemon/LaunchAgent
-  configuration and permission requirements.
-- The [macOS platform source](https://github.com/rustdesk/rustdesk/blob/251e1a3487518f763e0bb2b7eafb505fbd75b56d/src/platform/macos.rs)
-  (cursor handling, screen-recording permission checks, service
-  install/uninstall, display-resolution control, privilege escalation).
-- A [wiki page](https://github.com/rustdesk/rustdesk/wiki/macOS-Auto%E2%80%90Start-Service-Setup-%28for-Remote---MDM-Deployment%29)
-  with a script-based approach to registering the service for
-  remote/MDM deployment without user interaction.
+- 一个 [GitHub 讨论](https://github.com/rustdesk/rustdesk/discussions/7762)，关于配置 macOS 客户端在启动时自动启动（包括在登录屏幕），以实现无人值守访问——LaunchDaemon/LaunchAgent 配置和权限要求。
+- [macOS 平台源代码](https://github.com/rustdesk/rustdesk/blob/251e1a3487518f763e0bb2b7eafb505fbd75b56d/src/platform/macos.rs)（光标处理、屏幕录制权限检查、服务安装/卸载、显示分辨率控制、权限提升）。
+- 一个 [wiki 页面](https://github.com/rustdesk/rustdesk/wiki/macOS-Auto%E2%80%90Start-Service-Setup-%28for-Remote---MDM-Deployment%29)，介绍基于脚本的方式，用于在无需用户交互的情况下为远程/MDM 部署注册服务。
 
-Useful for locked-session/daemon-vs-GUI-agent thinking; MeowDisplay's own
-architecture and code are independent of it.
+有助于思考锁定会话/守护进程与 GUI 代理的差异；MeowDisplay 自身的架构和代码独立于它。
 
 ### AnyDesk
 
-[AnyDesk](https://anydesk.com) is a commercial remote-desktop product.
-Referenced above for its Wake-on-LAN-via-LAN-relay approach — a useful
-existence proof that "another online device on the same LAN relays the wake
-packet" is a workable, shipped pattern, independent of MeowDisplay's own
-future implementation.
+[AnyDesk](https://anydesk.com) 是一款商业远程桌面产品。上文引用了其通过 LAN 中继实现 Wake-on-LAN 的方法——这是一个有用的存在性证明，说明“同一 LAN 上的另一台在线设备中继唤醒包”是一种可行且已发布的模式，与 MeowDisplay 自身未来的实现无关。
 
-## USB transport: AOA versus the ADB tunnel (2026-11-07)
+<a id="usb-transport-aoa-versus-the-adb-tunnel-2026-11-07"></a>
+## USB 传输：AOA 与 ADB 隧道（2026-11-07）
 
-USB is only a **route**: pairing, pinned mutual TLS 1.3 and SPKI trust are the
-same as LAN/Remote. The shipping Mac transport uses an authorized ADB tunnel
-as opaque bytes (`apps/macos/AndroidUSB.swift`, `USBTLSBridge.swift`). An
-AOA (Android Open Accessory) transport removes the platform-tools/developer-
-options dependency and is implemented on the Android side (`USBAccess`,
-`USBAccessoryWire`, accessory filter/manifest entry), but the Mac AOA host
-stack is not shipped yet.
+USB 只是一种**路由**：配对、固定双向 TLS 1.3 和 SPKI 信任与 LAN/Remote 相同。已发布的 Mac 传输使用授权的 ADB 隧道作为不透明字节（`apps/macos/AndroidUSB.swift`、`USBTLSBridge.swift`）。AOA（Android Open Accessory）传输消除了对 platform-tools/开发者选项的依赖，并已在 Android 侧实现（`USBAccess`、`USBAccessoryWire`、配件过滤器/manifest 条目），但 Mac 的 AOA 主机栈尚未发布。
 
-Measured on the Huawei MRX-W39 (HarmonyOS tablet) with a correct host-side
-implementation (`IOUSBHost` and classic `IOUSBLib` both tried):
+在华为 MRX-W39（HarmonyOS 平板）上使用正确的主机端实现（`IOUSBHost` 和经典 `IOUSBLib` 都试过）测得：
 
-- `GET_PROTOCOL` returns **2** (AOA 2.0 claimed).
-- `SEND_STRING` returns success.
-- `ACCESSORY_START` returns success, but the device never re-enumerates as
-  `18d1:2d00/2d01`; it stays at `12d1:107e`.
-- Tried charging-only, MTP and PTP USB modes, with and without the adb server,
-  after a replug, and through both IOUSBHost and IOUSBLib. No accessory
-  enumeration.
+- `GET_PROTOCOL` 返回 **2**（声明支持 AOA 2.0）。
+- `SEND_STRING` 返回成功。
+- `ACCESSORY_START` 返回成功，但设备从未重新枚举为 `18d1:2d00/2d01`；它保持在 `12d1:107e`。
+- 尝试了仅充电、MTP 和 PTP USB 模式，有无 adb server，重新插拔之后，以及通过 IOUSBHost 和 IOUSBLib 两种方式。都没有配件枚举。
 
-Conclusion: the firmware accepts the AOA control requests but does not
-perform the accessory switch. AOA cannot be the only USB path until a device
-that actually completes the switch is available for end-to-end verification.
-The Android AOA code stays in place behind accessory attachment; the ADB
-tunnel remains the fallback and the shipping path on this device. Trust is
-unchanged in both paths.
+结论：固件接受 AOA 控制请求，但不执行配件切换。在有一台真正完成切换的设备可用于端到端验证之前，AOA 不能作为唯一的 USB 路径。Android 的 AOA 代码保留在配件连接之后；ADB 隧道仍然是此设备上的回退路径和发布路径。两条路径中的信任保持不变。

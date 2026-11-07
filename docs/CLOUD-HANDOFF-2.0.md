@@ -1,41 +1,33 @@
-# MeowDisplay 2.0 — cloud handoff
+# MeowDisplay 2.0 — 云端交接
 
-Written 2026-10-31 at the end of local development. Local work stops here; what remains runs in
-the cloud through the repository's existing release process (no second pipeline).
+写于 2026-10-31，本地开发的收尾阶段。本地工作到此为止；剩余工作通过仓库现有的发布流程在云端执行（不另建第二条流水线）。
 
-## Repository and revision
+## 仓库与版本
 
-- Repository: `raiseCatError/meowdisplay` (fork of OpenDisplay; GPL; keep the attribution and
-  fork relationship — see README, REFERENCE.md and the `reference/opendisplay` branch).
-- Branch: `feature/v2-hotspot-parity` (pushed for the cloud). The SHA is whatever this file was
-  pushed at; the final report gives it. `release/2.0.0` was **not** pushed from local.
-- Default branch on GitHub: still `dev/opendisplay-next`. Branch model and release rules:
-  BRANCHING.md, RELEASE.md, RELEASE_ASSETS.md, REFERENCE.md.
+- 仓库：`raiseCatError/meowdisplay`（OpenDisplay 的 fork；GPL；保留署名与 fork 关系——见 README、REFERENCE.md 及 `reference/opendisplay` 分支）。
+- 分支：`feature/v2-hotspot-parity`（已为云端推送）。SHA 即本文件推送时的提交；最终报告会给出。`release/2.0.0` **没有**从本地推送。
+- GitHub 上的默认分支：仍为 `dev/opendisplay-next`。分支模型与发布规则：BRANCHING.md、RELEASE.md、RELEASE_ASSETS.md、REFERENCE.md。
 
-## Architecture (read first)
+## 架构（先读）
 
-ARCHITECTURE.md (overall), PROTOCOL.md (wire protocol; §6.10 addenda cover Window mode, Stage
-Manager, Add to Stage, Mission Control), WINDOW_MODE.md, MULTI_DEVICE.md, RECEIVER_INPUT.md,
-RECEIVER_CONTROLS.md, PARITY.md (Apple ↔ Android), COMPATIBILITY.md, SECURITY.md.
+ARCHITECTURE.md（整体）、PROTOCOL.md（线上协议；§6.10 附录涵盖窗口模式、台前调度、Add to Stage、调度中心）、WINDOW_MODE.md、MULTI_DEVICE.md、RECEIVER_INPUT.md、RECEIVER_CONTROLS.md、PARITY.md（Apple ↔ Android）、COMPATIBILITY.md、SECURITY.md。
 
-| Part | Folder | Target / module |
+| 部分 | 文件夹 | 目标 / 模块 |
 |---|---|---|
-| Mac sender (also hosts the Mac receiver role) | `Mac/` | `OpenSidecarMac` (macOS 14+) |
-| Mac receiver | `MacReceiver/` | `OpenSidecarMacReceiver` |
-| iPhone and iPad receiver (one app) | `iOS/`, `Shared/` | `OpenSidecariOS` (iOS 16.4+) |
-| Android receiver | `AndroidReceiver/` (`core`, `app`) | minSdk 29, targetSdk 36 |
-| Tests | `MacTests/`, `iOSUITests/`, `AndroidReceiver/*/src/test` | `OpenSidecarMacTests`, `OpenSidecariOSUITests` |
-| Prototype (not shipped) | `Prototypes/CrashSafeShield` | isolated; see Privacy Shield below |
+| Mac 发送端（同时承载 Mac 接收端角色） | `Mac/` | `OpenSidecarMac`（macOS 14+） |
+| Mac 接收端 | `MacReceiver/` | `OpenSidecarMacReceiver` |
+| iPhone 与 iPad 接收端（同一个 App） | `iOS/`、`Shared/` | `OpenSidecariOS`（iOS 16.4+） |
+| Android 接收端 | `AndroidReceiver/`（`core`、`app`） | minSdk 29、targetSdk 36 |
+| 测试 | `MacTests/`、`iOSUITests/`、`AndroidReceiver/*/src/test` | `OpenSidecarMacTests`、`OpenSidecariOSUITests` |
+| 原型（未发布） | `Prototypes/CrashSafeShield` | 独立隔离；见下文隐私护盾 |
 
-The Xcode project is generated: edit `project.yml`, then run `./generate.sh`. The Mac test target
-lists the `Mac/` and `Shared/` files it compiles one by one.
+Xcode 项目是生成的：编辑 `project.yml`，然后运行 `./generate.sh`。Mac 测试目标逐个列出它要编译的 `Mac/` 和 `Shared/` 文件。
 
-## Toolchain
+## 工具链
 
-Xcode 27.1 (27A9269), Swift 6 language mode, macOS 27 SDK. Android: AGP 9.4.1, Kotlin 2.4.21,
-JDK 17. Sparkle (Mac updates), swift-certificates, swift-crypto via SwiftPM.
+Xcode 27.1（27A9269）、Swift 6 语言模式、macOS 27 SDK。Android：AGP 9.4.1、Kotlin 2.4.21、JDK 17。Sparkle（Mac 更新）、swift-certificates、swift-crypto 通过 SwiftPM。
 
-## Build and test
+## 构建与测试
 
 ```sh
 # Mac unit tests (covers Shared/ logic used by iOS too)
@@ -46,165 +38,91 @@ xcodebuild build -project MeowDisplay.xcodeproj -scheme OpenSidecariOS -destinat
 cd AndroidReceiver && ./gradlew :core:test :app:testDebugUnitTest :app:assembleDebug
 ```
 
-CI: `.github/workflows/tests.yml`; release workflows `release-*.yml`; reference sync
-`reference-*.yml`; `repository-guard.yml`, `pr-title.yml`.
+CI：`.github/workflows/tests.yml`；发布工作流 `release-*.yml`；参考同步 `reference-*.yml`；`repository-guard.yml`、`pr-title.yml`。
 
-Results at handoff (2026-10-31): full Mac unit suite at 63c3c46, 2461 run, 0 failures, 2
-skipped; at 70d3507 (apps bar only) StagePeekDockLayoutTests 5/5 and Android 998/998 (2
-skipped); iOS device build and Mac sender/receiver builds succeed.
+交接时的结果（2026-10-31）：完整 Mac 单元测试套件在 63c3c46 上运行 2461 项，0 失败，2 跳过；在 70d3507（仅 App 栏）上 StagePeekDockLayoutTests 5/5，Android 998/998（2 跳过）；iOS 真机构建与 Mac 发送端/接收端构建均成功。
 
-Installed for the final physical checks (in place, data and pairing kept): Mac Dev cdeda71 (Mac
-code unchanged since), iPhone and iPad iOS 2000061 (9b8ba92), Moto debug 70d3507 (Android code unchanged since). Live UI tests (`iOSUITests/LiveStabilizationTests`) need a paired Mac and a
-device and don't run in CI.
+为最终物理检查安装的版本（原地安装，保留数据和配对）：Mac Dev cdeda71（此后 Mac 代码未变）、iPhone 与 iPad iOS 2000061（9b8ba92）、Moto debug 70d3507（此后 Android 代码未变）。实时 UI 测试（`iOSUITests/LiveStabilizationTests`）需要一台已配对的 Mac 和一台设备，不在 CI 中运行。
 
-## Features in 2.0 and their state
+## 2.0 中的功能及其状态
 
-The completion matrix is the source of truth, with implemented / automated / physically checked /
-release-ready kept apart: `handoff-2.0/COMPLETION-MATRIX.md` (sanitized copy; the original and
-the evidence folders live in the owner's local integration folder). Highlights since the last
-cloud review:
+完成矩阵是事实来源，其中“已实现 / 已自动化 / 已物理检查 / 可发布”四类状态分开记录：`handoff-2.0/COMPLETION-MATRIX.md`（脱敏副本；原件和证据文件夹位于所有者的本地集成文件夹中）。自上次云端评审以来的重点：
 
-- Window mode on iPhone, iPad and Android (panes, tabs, free rotation, per-pane trackpad cursor,
-  Stage Manager handling, Spatial Overview / Gallery as the Expanded Layout setting).
-- View Only: selecting a pane, panning and zooming stay local; a touch meant for the Mac never
-  leaves the device and shows Request Control inside the selected pane (existing request flow,
-  no replay of the touch).
-- Mission Control: panes pause without restarts; devices say "Mission Control is open on your
-  Mac. Video is paused." and one pane offers Exit Mission Control (control only; the Mac
-  re-checks before pressing Escape). Detection details: PROTOCOL.md §6.10 addendum.
-- Capture broker (`Mac/CoalescingFetch.swift`, `Mac/ShareableContentBroker.swift`): one shared,
-  bounded, cancellable ScreenCaptureKit content request per moment, with start traces.
-- Paired-only Mac user name and short Mac ID to tell same-named Macs apart.
-- Remote files: Save to Device puts photos and videos in Photos (iOS add-only permission) or the
-  gallery (Android, Pictures/Movies ▸ MeowDisplay), everything else in Files ▸ On My iPhone/iPad ▸
-  MeowDisplay ▸ Downloads (Android: Download ▸ MeowDisplay), and says where. Share opens the
-  system share sheet.
-- Stage Peek apps bar (iPhone/iPad): widens on scroll; pulling down (or tapping the handle) opens
-  four rows with names, then the whole screen (stopping above the Expand and Close buttons, which
-  then shrink it; no swipe from the screen's bottom edge needed); swipe up on its handle to
-  compact; choosing an app closes it.
-  The search filters the apps bar (Android's apps row too). Tap empty space in the expanded
-  view to close it.
-- Not built: Camera Mode / Microphone Mode (owner deferred). Clipboard is out of this release's
-  checklist. The growing apps bar is not on Android yet.
+- iPhone、iPad 和 Android 上的窗口模式（窗格、标签页、自由旋转、每窗格触控板光标、台前调度处理、作为“展开布局”设置的空间总览 / 画廊）。
+- 仅查看：选择窗格、平移和缩放都在本地完成；原本发给 Mac 的触摸不会离开设备，并在所选窗格内显示“请求控制”（沿用现有请求流程，不重放该触摸）。
+- 调度中心：窗格暂停且不重启；设备显示“Mac 上已打开调度中心。视频已暂停。”，其中一个窗格提供“退出调度中心”（仅限控制；Mac 在按下 Escape 前会重新检查）。检测细节：PROTOCOL.md §6.10 附录。
+- 采集代理（`Mac/CoalescingFetch.swift`、`Mac/ShareableContentBroker.swift`）：每个时刻只有一个共享、有界、可取消的 ScreenCaptureKit 内容请求，并带启动跟踪。
+- 仅对已配对设备可见的 Mac 用户名和短 Mac ID，用于区分同名 Mac。
+- 远程文件：“存储到设备”把照片和视频放入“照片”（iOS 仅添加权限）或相册（Android，图片/影片 ▸ MeowDisplay），其余文件放入“文件” ▸“在我的 iPhone/iPad 上” ▸ MeowDisplay ▸ 下载（Android：下载 ▸ MeowDisplay），并提示存放位置。“共享”会打开系统共享面板。
+- 台前预览 App 栏（iPhone/iPad）：滚动时变宽；下拉（或点按把手）先展开四行带名称的 App，再展开整个屏幕（停在“展开”和“关闭”按钮上方，此时这些按钮会把它缩小；无需从屏幕底边滑动）；在把手上向上滑动可收起；选择某个 App 后关闭。搜索会过滤 App 栏（Android 的 App 行也一样）。在展开视图中点按空白处可关闭。
+- 未构建：摄像头模式 / 麦克风模式（所有者暂缓）。剪贴板不在本版本清单内。可增宽的 App 栏尚未在 Android 上提供。
 
-## Physical QA done (by the owner's devices, 2026-10-29 … 31)
+## 已完成的物理 QA（所有者的设备，2026-10-29 … 31）
 
-Mac (macOS 27) with iPhone 14 Pro Max, iPad (9th gen) and a Moto G5S Plus (LineageOS, no Google
-Play services): connect and video; Mirror, Extend and Window starts; two receivers at once in
-mixed modes; Privacy Shield cover/remove and Touch ID removal; pane selection and inline Request
-Control; Mission Control open/close (keyboard) with one and two receivers.
+Mac（macOS 27）搭配 iPhone 14 Pro Max、iPad（第 9 代）和 Moto G5S Plus（LineageOS，无 Google Play 服务）：连接与视频；镜像、扩展和窗口启动；混合模式下同时连接两个接收端；隐私护盾的遮盖/移除与 Touch ID 移除；窗格选择与内联“请求控制”；在连接一个和两个接收端时用键盘打开/关闭调度中心。
 
-iPad (9th gen, iPadOS 27.0.1), owner hands-on 2026-10-31 on the final builds: Window mode, pane
-selection, zoom, pan, per-tab rotation, Spatial Overview and rotation, View Only pill → approval →
-typing, Mission Control pause/recovery and Exit Mission Control with control, iPad + Moto at
-once, Mirror and Extend, scrolling, peek drags, Share and Save to Device. Seven failures found
-during that run were fixed and re-checked (handoff-2.0/COMPLETION-MATRIX.md, "iPad QA
-2026-10-31"), including a Save crash on iOS and a session-end crash on Android.
+iPad（第 9 代，iPadOS 27.0.1），所有者于 2026-10-31 在最终构建上手动验证：窗口模式、窗格选择、缩放、平移、每标签页旋转、空间总览与旋转、仅查看胶囊 → 批准 → 输入、调度中心暂停/恢复及带控制权退出调度中心、iPad + Moto 同时连接、镜像与扩展、滚动、台前预览拖拽、“共享”与“存储到设备”。该轮发现的七个失败均已修复并复检（handoff-2.0/COMPLETION-MATRIX.md，“iPad QA 2026-10-31”），包括 iOS 上的“存储”崩溃和 Android 上的会话结束崩溃。
 
-Not done by hand: TalkBack (the Moto has none), VoiceOver walkthroughs and the VoiceOver/Voice
-Control declarations, Larger Text, the Privacy Shield covering during Mission Control.
+未手动完成：TalkBack（Moto 上没有）、VoiceOver 走查及 VoiceOver/Voice Control 声明、更大字体、调度中心期间的隐私护盾遮盖。
 
-## Known limitations
+## 已知限制
 
-- **Stage Manager**: windows in its side strip are paused by macOS. Panes say so and offer Show
-  on Mac / Turn Off Stage Manager (owner-made Shortcuts). Add to Current Stage is implemented but
-  never offered: macOS 27 acknowledges the accessibility action without moving the window.
-- **Mission Control**: macOS pauses window captures while it is open; there's no public API that
-  reports it, so detection uses the public window list plus an Accessibility confirmation.
-- **Extend start time / AltTab**: AltTab 10.x floods macOS's capture service (replayd) on macOS
-  26/27 (alt-tab-macos#5861), which made Extend starts take 19–61 s. Without it: Mirror ~0.15 s,
-  Extend 0.7–2.4 s, Window 1–4 s. The broker keeps MeowDisplay to at most two outstanding requests.
-  Findings: `handoff-2.0/EXTEND-START-ALTTAB-FINDINGS.md`.
+- **台前调度**：其侧边条中的窗口会被 macOS 暂停。窗格会提示这一点，并提供“在 Mac 上显示”/“关闭台前调度”（所有者制作的快捷指令）。添加到当前舞台已实现但从不提供：macOS 27 会确认该辅助功能操作，却不移动窗口。
+- **调度中心**：打开期间 macOS 会暂停窗口采集；没有公开 API 报告这一状态，因此检测依赖公开窗口列表加辅助功能确认。
+- **扩展启动时间 / AltTab**：AltTab 10.x 在 macOS 26/27 上会冲击 macOS 采集服务（replayd）（alt-tab-macos#5861），导致扩展启动耗时 19–61 秒。没有它时：镜像约 0.15 秒，扩展 0.7–2.4 秒，窗口 1–4 秒。代理把 MeowDisplay 的未完成请求限制在最多两个。调查结果：`handoff-2.0/EXTEND-START-ALTTAB-FINDINGS.md`。
 
-## Privacy Shield
+## 隐私护盾
 
-Threat model: someone at the Mac while a device is connected must not see or use it; the owner
-removes the shield with the login password or Touch ID. The shield excludes itself from capture
-through the broker's content list. Quitting while it covers locks the Mac first.
-Crash-safe design (an out-of-process guardian so a crash never leaves the Mac uncovered) is a
-**prototype only** (`Prototypes/CrashSafeShield`, 9 tests; no persistent helper installed):
-`handoff-2.0/PRIVACY-SHIELD-CRASH-SAFE-DESIGN.md`. Installing a helper needs the owner's
-approval.
+威胁模型：设备连接期间，身处 Mac 前的人不得看到或使用它；所有者用登录密码或 Touch ID 移除护盾。护盾通过代理的内容列表把自己排除在采集之外。遮盖期间退出会先锁定 Mac。
+崩溃安全设计（用一个进程外守护者，确保崩溃时 Mac 不会裸露）**仅为原型**（`Prototypes/CrashSafeShield`，9 项测试；未安装常驻助手）：`handoff-2.0/PRIVACY-SHIELD-CRASH-SAFE-DESIGN.md`。安装助手需要所有者批准。
 
-## Branding
+## 品牌
 
-The apps show MeowDisplay everywhere a person sees a name (MeowDisplay, MeowDisplay Dev,
-MeowDisplay Receiver). Legacy OpenSidecar/OpenDisplay names remain only where they are internal
-or a compatibility contract: Xcode targets and schemes (`OpenSidecarMac`, `OpenSidecariOS`,
-`OpenSidecarMacReceiver`), Swift type and file names, Bonjour types (`_opensidecar._tcp`,
-`_opendisplay-pair._tcp`, `_opendisplay-mac-pair._tcp`), keychain labels, HKDF salts, log file
-names, and the GPL attribution to OpenDisplay. Details and the reasons:
-`handoff-2.0/BRANDING-AUDIT.md`.
+在所有人能看到名称的地方，App 都显示 MeowDisplay（MeowDisplay、MeowDisplay Dev、MeowDisplay Receiver）。旧的 OpenSidecar/OpenDisplay 名称只保留在内部使用或作为兼容性契约之处：Xcode target 与 scheme（`OpenSidecarMac`、`OpenSidecariOS`、`OpenSidecarMacReceiver`）、Swift 类型与文件名、Bonjour 服务类型（`_opensidecar._tcp`、`_opendisplay-pair._tcp`、`_opendisplay-mac-pair._tcp`）、钥匙串标签、HKDF salt、日志文件名，以及对 OpenDisplay 的 GPL 署名。详情与原因：`handoff-2.0/BRANDING-AUDIT.md`。
 
-## Signing, notarization and stores
+## 签名、公证与商店
 
-Signing and the release mechanics are owned by the existing pipeline: RELEASE.md,
-RELEASE_ASSETS.md, `.github/release-config.json`, `scripts/release/`, `fastlane/` (Appfile,
-Fastfile, Matchfile, APP_STORE_LISTING.md, APP_REVIEW.md, PLAY_STORE_LISTING.md). Accessibility
-declarations: `handoff-2.0/STORE-ACCESSIBILITY.md` (declare only what was verified). The
-read-only audit of what is actually configured on GitHub (environments, rulesets, secret names,
-gaps) is summarized in the section below.
+签名与发布机制由现有流水线负责：RELEASE.md、RELEASE_ASSETS.md、`.github/release-config.json`、`scripts/release/`、`fastlane/`（Appfile、Fastfile、Matchfile、APP_STORE_LISTING.md、APP_REVIEW.md、PLAY_STORE_LISTING.md）。辅助功能声明：`handoff-2.0/STORE-ACCESSIBILITY.md`（只声明已经验证的内容）。关于 GitHub 上实际配置（环境、规则集、密钥名称、缺口）的只读审计总结见下一节。
 
-## Release pipeline as found (read-only audit, 2026-10-31)
+## 发布流水线现状（只读审计，2026-10-31）
 
-The branch model in BRANCHING.md / RELEASE.md is **documented, not yet applied** on GitHub:
+BRANCHING.md / RELEASE.md 中的分支模型已在文档中定义，但**尚未在 GitHub 上应用**：
 
-- Default branch is still `dev/opendisplay-next`. No remote `dev`, `reference/opendisplay` or
-  `release-state` yet. The only release branch is `release/app-store-rc` (unprotected).
-- `main` still holds the upstream project's tree with its inherited `release.yml`
-  (release-please) and `pages.yml`. A `release-please--branches--main` branch exists. The
-  default branch also has a legacy `app-store-candidate.yml`. Retire these; don't extend them.
-- Applied rulesets: only the two old ones ("Protect Main Branch", "Protect development branch").
-  The rulesets in `.github/rulesets/` are not applied.
-- Environments: none. The release workflows expect release-build, ios-upload, android-upload,
-  release-stores, release-publish, release-pr and website-update.
-- Repo secrets present: DEVELOPMENT_TEAM, MATCH_DEPLOY_KEY, MATCH_GIT_URL, SPARKLE_PRIVATE_KEY.
-  Missing:
+- 默认分支仍是 `dev/opendisplay-next`。尚无远程 `dev`、`reference/opendisplay` 或 `release-state`。唯一的发布分支是 `release/app-store-rc`（未受保护）。
+- `main` 仍保留上游项目的目录树及其继承的 `release.yml`（release-please）和 `pages.yml`。存在 `release-please--branches--main` 分支。默认分支还有一个遗留的 `app-store-candidate.yml`。应停用这些，不要扩展它们。
+- 已应用的规则集：只有两个旧的（"Protect Main Branch"、"Protect development branch"）。`.github/rulesets/` 中的规则集未应用。
+- 环境：无。发布工作流期望 release-build、ios-upload、android-upload、release-stores、release-publish、release-pr 和 website-update。
+- 仓库中已有的密钥：DEVELOPMENT_TEAM、MATCH_DEPLOY_KEY、MATCH_GIT_URL、SPARKLE_PRIVATE_KEY。缺失：
   - MATCH_PASSWORD
-  - the APP_STORE_CONNECT_* secrets
-  - the ANDROID_UPLOAD_* secrets
+  - APP_STORE_CONNECT_* 系列密钥
+  - ANDROID_UPLOAD_* 系列密钥
   - PLAY_SERVICE_ACCOUNT_JSON
   - RELEASE_APP_PRIVATE_KEY
   - WEBSITE_APP_PRIVATE_KEY
 
-  No repo variables are set.
-- The release-*, reference-* and guard workflows aren't on the default branch yet, so they can't
-  be dispatched.
-- `.github/release-config.json` has `publishMode` "manual-final-approval" (line 2),
-  `crossPlatformReady` false (line 3) and `android.reviewTrack` "production" (line 17; must
-  become a beta track first).
+  未设置任何仓库变量。
+- `release-*`、`reference-*` 和 guard 工作流尚未出现在默认分支上，因此无法手动触发。
+- `.github/release-config.json` 中 `publishMode` 为 "manual-final-approval"（第 2 行），`crossPlatformReady` 为 false（第 3 行），`android.reviewTrack` 为 "production"（第 17 行；必须先改为 beta 轨道）。
 
-Applying the documented model needs owner approval: default branch, rulesets, environments and
-secrets. That is the existing pipeline being switched on, not a second one.
+应用文档中的模型需要所有者批准：默认分支、规则集、环境和密钥。这是启用现有流水线，而不是新建第二条。
 
-## Cloud assignment (corrected)
+## 云端任务（修订版）
 
-Work only through the existing branches, workflows and reviewed PRs. Never weaken a gate to get
-something through; stop and report instead.
+只通过现有分支、工作流和经评审的 PR 开展工作。绝不为了让某项内容通过而削弱门禁；应停下来并报告。
 
-- **A. Read-only audit.** Re-verify this handoff against the repository: build, run every test
-  suite, check entitlements, privacy manifests, required-reason APIs, licenses/attribution,
-  secrets in history, and the release configuration. Produce findings; change nothing.
-- **B. Fixes with tests.** Fix what A finds on `feature/v2-hotspot-parity` (or a branch from it),
-  each fix with a test, through PRs into `dev` per BRANCHING.md.
-- **C. `release/2.0.0`** created by the existing reviewed PR process (release-pr / candidate
-  workflows), not by hand.
-- **D. Store and distribution staging, nothing live:**
-  - Apple: submit 2.0.0 for review with **manual release** (no automatic release).
-  - Google Play: upload the AAB to an **internal or closed beta track** only. Fix
-    `android.reviewTrack=production` in the release config to beta-first.
-  - Mac: notarized DMGs, Sparkle signatures and checksums **staged**, not marked Latest and not
-    live in the appcast.
-  - Reconcile `publishMode=manual-final-approval` and `crossPlatformReady=false` with the above
-    without weakening any gate.
-- **E. README and website redesign** in a staging branch/preview only.
-- **F. Stop before public publication.** The owner gives the final go-ahead for App Store
-  release, Play production, the Mac Latest release and the website.
+- **A. 只读审计。** 对照仓库重新核实本交接：构建、运行所有测试套件、检查 entitlement、隐私清单、required-reason API、许可证/署名、历史中的密钥以及发布配置。产出发现；不做任何改动。
+- **B. 带测试的修复。** 在 `feature/v2-hotspot-parity`（或从其切出的分支）上修复 A 发现的问题，每个修复都配测试，并按 BRANCHING.md 通过 PR 合入 `dev`。
+- **C. `release/2.0.0`** 由现有经评审的 PR 流程（release-pr / candidate 工作流）创建，不手动创建。
+- **D. 商店与分发暂存，不正式上线：**
+  - Apple：以**手动发布**方式提交 2.0.0 审核（不自动发布）。
+  - Google Play：仅将 AAB 上传到**内部或封闭 beta 轨道**。把发布配置中的 `android.reviewTrack=production` 改为 beta 优先。
+  - Mac：公证后的 DMG、Sparkle 签名和校验和**暂存**，不标记为 Latest，也不在 appcast 中上线。
+  - 在不削弱任何门禁的前提下，使 `publishMode=manual-final-approval` 和 `crossPlatformReady=false` 与上述安排一致。
+- **E. README 与网站改版**仅在暂存分支/预览中进行。
+- **F. 公开发布前停止。** App Store 发布、Play 正式版、Mac Latest 发布和网站上线均由所有者最终批准。
 
-## Owner actions before or during the cloud run
+## 云端运行前或期间所有者需执行的操作
 
-- Approve or decline the crash-safe Privacy Shield helper (prototype only today).
-- Say go on the 47 re-verified branch deletions (list with SHAs in the local integration report;
-  the session's safety check blocked running them).
-- Provide or confirm the release secrets/environments the audit lists as missing.
+- 批准或拒绝崩溃安全的隐私护盾助手（目前仅为原型）。
+- 对 47 个已复核的分支删除给出许可（带 SHA 的列表在本地集成报告中；会话的安全检查阻止了执行）。
+- 提供或确认审计列为缺失的发布密钥/环境。

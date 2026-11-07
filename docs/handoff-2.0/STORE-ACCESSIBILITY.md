@@ -1,130 +1,128 @@
-<!-- Sanitized copy of the integration folder's STORE-ACCESSIBILITY-2026-10-30.md (2026-10-31). Local paths and personal names removed; the integration folder holds the original and evidence. -->
+<!-- 集成文件夹中 STORE-ACCESSIBILITY-2026-10-30.md 的脱敏副本（2026-10-31）。本地路径和个人姓名已移除；原件与证据保存在集成文件夹中。 -->
 
-# Store accessibility: what to declare for MeowDisplay 2.0 (2026-10-30)
+# 商店辅助功能：MeowDisplay 2.0 应声明什么（2026-10-30）
 
-Branch feature/v2-hotspot-parity, commits 45db122 (Android) and 990375b (iOS). Nothing here is
-submitted. Everything below was checked in code and builds only. **Nobody has used it with
-VoiceOver, Voice Control or TalkBack on a device yet**, so the first step is the owner's device check.
+分支 feature/v2-hotspot-parity，提交 45db122（Android）和 990375b（iOS）。此处没有任何内容已
+提交。以下所有内容仅在代码和构建中检查过。**尚未有人在设备上使用 VoiceOver、Voice Control
+或 TalkBack 验证过**，因此第一步是所有者的设备检查。
 
-## What the accessibility passes added
+## 辅助功能工作新增了什么
 
-**iOS and iPadOS (990375b, 15 files):**
-- The Mac picture is one element called "Mac screen". **Changed later the same night (7f8a0f1):**
-  while VoiceOver runs, the picture takes no touches at all until the user picks **Turn On Direct
-  Touch** from its actions (VoiceOver rotor ▸ Actions). Activating the picture (double tap) never
-  clicks the Mac. Before this, VoiceOver's own gestures could reach the Mac: exploring by touch
-  over a direct-interaction element, or the double-tap fallback that taps the element's centre.
-  Direct Touch ends when VoiceOver stops. Android does the same for TalkBack (double tap and long
-  press are answered by the view; injected touches are ignored until Direct Touch).
-- VoiceOver announces: Connected to <Mac>; Reconnecting, Connection Lost and Mac Disconnected;
-  Request Control granted or refused; Remote Files notices; pairing errors.
-- Voice Control: spoken names for the tray keys (Cmd, Alt, Ctrl, Esc, Dock, Gear) and for
-  Connect, Wake & Connect, Try Again, Pair and More. Connect's long-press Mirror and Extend choices
-  are VoiceOver actions.
-- Window mode: panes are buttons with a Focus action. The pane divider is adjustable (swipe up or
-  down to resize in 5% steps). The card Add button is an action, and the app menus expose
-  checkmarks and submenus.
-- The "Switch to Window view?" prompt and the Natural Touch note stay on screen while VoiceOver
-  runs, instead of disappearing after 8 or 12 seconds.
-- Reduce Motion: banners and sheets fade instead of sliding. The marquee, drag overlays and Stage
-  Peek were already covered.
-- The pairing sheet scrolls at large text sizes, and the code is read digit by digit. Headings are
-  added, decorative icons are hidden, and the A/V Sync and Control Size sliders have names and values.
+**iOS 与 iPadOS（990375b，15 个文件）：**
+- Mac 画面是一个名为 "Mac screen" 的元素。**当晚稍后更改（7f8a0f1）：**
+  VoiceOver 运行时，画面完全不接受触摸，直到用户从其操作中选择**开启直接
+  触控**（VoiceOver 转子 ▸ 操作）。激活画面（双击）绝不会点击 Mac。在此之前，
+  VoiceOver 自身的手势可以触达 Mac：在直接交互元素上触摸探索，或双击回退会点按
+  元素中心。VoiceOver 停止时直接触控结束。Android 对 TalkBack 也采取相同做法
+  （双击和长按由视图应答；在直接触控前注入的触摸会被忽略）。
+- VoiceOver 会朗读：已连接到 <Mac>；正在重连、连接丢失和 Mac 已断开；
+  请求控制被授予或拒绝；远程文件通知；配对错误。
+- Voice Control：托盘按键（Cmd、Alt、Ctrl、Esc、Dock、Gear）以及
+  “连接”、“唤醒并连接”、“重试”、“配对”和“更多”的语音名称。“连接”的长按“镜像”和“扩展”选项
+  是 VoiceOver 操作。
+- 窗口模式：窗格是带“聚焦”操作的按钮。窗格分隔条可调整（上滑或下滑以 5% 步长
+  调整大小）。卡片“添加”按钮是一个操作，App 菜单会暴露勾选标记和子菜单。
+- VoiceOver 运行时，“切换到窗口视图？”提示和自然触控说明会留在屏幕上，
+  而不是在 8 或 12 秒后消失。
+- 减弱动态效果：横幅和面板使用淡入淡出而非滑动。跑马灯、拖拽覆盖层和台前预览
+  此前已覆盖。
+- 配对面板在大字体下可滚动，配对码逐位朗读。添加了标题，隐藏了装饰性图标，
+  A/V 同步和控制大小滑块具有名称和值。
 
-**Android (45db122, 17 files):**
-- TalkBack labels, roles, states and headings across Home, pairing, Settings, Window-mode panes and
-  menus, Stage Peek, Remote Files and the editors.
-- Live status announcements and a named live Mac view.
-- Touch targets of 48 dp where the layout allows. Text wraps at large font sizes.
+**Android（45db122，17 个文件）：**
+- 主页、配对、设置、窗口模式窗格和菜单、台前预览、远程文件以及编辑器中的
+  TalkBack 标签、角色、状态和标题。
+- 实时状态朗读和命名的实时 Mac 视图。
+- 在布局允许处使用 48 dp 触控目标。文本在大字体下换行。
 
-## App Store Connect: Accessibility Nutrition Labels
+## App Store Connect：辅助功能营养标签
 
-App Store Connect asks, for each device (iPhone, iPad), whether the app supports each feature.
-Apple's rule is that a feature is declared only when people can complete the app's **common
-tasks** with it. For MeowDisplay those tasks are: pair, connect, request control, use the tray,
-change settings, use a Window-mode pane and Remote Files.
+App Store Connect 会针对每类设备（iPhone、iPad）询问 App 是否支持各项功能。
+Apple 的规则是：只有当人们能借助某项功能完成 App 的**常见任务**时才声明该功能。
+对 MeowDisplay 而言，这些任务是：配对、连接、请求控制、使用托盘、更改设置、
+使用窗口模式窗格和远程文件。
 
-| Feature | iPhone | iPad | Recommendation |
+| 功能 | iPhone | iPad | 建议 |
 |---|---|---|---|
-| VoiceOver | After device check | After device check | Declare only once the checklist below passes. The Mac's own picture is video, so VoiceOver can't read what's on the Mac. Everything around it is labelled. |
-| Voice Control | After device check | After device check | Same checklist, by voice ("Tap Connect", "Tap Cmd"). Custom icon-only shortcuts are named by their titles. |
-| Larger Text | Don't declare yet | Don't declare yet | Home, Settings, sheets and Files scale. The in-session tray chips, the 10 pt control hints and the Stage Peek chips are fixed sizes. |
-| Dark Interface | Declare | Declare | System colours throughout; the session screen is dark by design. Glance at Home in Dark mode first. |
-| Differentiate Without Color Alone | Declare | Declare | Status and On/Off/Selected states are in text or traits, not colour only. |
-| Sufficient Contrast | Don't declare yet | Don't declare yet | Not measured. Risks: white text on translucent overlays over a bright Mac picture, and system blue text (about 4:1 on white). |
-| Reduced Motion | Declare | Declare | Decorative motion fades or stops. The live video and the finger-driven pan, zoom and rotate follow the user's own hands, so they are not decorative. |
-| Captions | No (not applicable) | No (not applicable) | No spoken media of its own; audio is the Mac's system sound. |
-| Audio Descriptions | No (not applicable) | No (not applicable) | No video content of its own. |
+| VoiceOver | 设备检查后 | 设备检查后 | 仅在下方检查清单通过后声明。Mac 自身的画面是视频，因此 VoiceOver 无法读取 Mac 上的内容。画面周围的一切都有标签。 |
+| Voice Control | 设备检查后 | 设备检查后 | 相同清单，用语音完成（“点按连接”、“点按 Cmd”）。仅图标的自定义快捷方式以其标题命名。 |
+| 更大字体 | 暂不声明 | 暂不声明 | 主页、设置、面板和文件会缩放。会话内托盘的小标签、10 pt 控制提示和台前预览小标签为固定大小。 |
+| 深色界面 | 声明 | 声明 | 全程使用系统颜色；会话屏幕按设计为深色。先在深色模式下查看主页。 |
+| 不单靠颜色区分 | 声明 | 声明 | 状态和开/关/选中状态通过文本或特征表达，而非仅靠颜色。 |
+| 足够对比度 | 暂不声明 | 暂不声明 | 未测量。风险：明亮 Mac 画面上方的半透明覆盖层上的白色文字，以及系统蓝色文字（在白底上约 4:1）。 |
+| 减弱动态效果 | 声明 | 声明 | 装饰性动态效果淡出或停止。实时视频以及手指驱动的平移、缩放和旋转跟随用户自己的手，因此不属于装饰性效果。 |
+| 字幕 | 否（不适用） | 否（不适用） | 自身没有语音媒体；音频是 Mac 的系统声音。 |
+| 音频描述 | 否（不适用） | 否（不适用） | 自身没有视频内容。 |
 
-Labels can be changed later. Declaring fewer features now and adding more after testing is safer
-than declaring one that fails review or a user.
+标签可以稍后更改。现在少声明一些、测试后再增加，比声明一项无法通过审核或让用户失望的
+功能更稳妥。
 
-### Automated audit on the iPhone (2026-10-30, XCUITest `performAccessibilityAudit`, iOS 27.0.1)
+### iPhone 上的自动审计（2026-10-30，XCUITest `performAccessibilityAudit`，iOS 27.0.1）
 
-- Home screen: 6 issues. "Dynamic Type font sizes are partially unsupported" on How to Connect,
-  the Mac's name, Nearby, This Device and Try the Demo; the Mac's name is clipped.
-- Live Window-mode session: 1 issue. The Stage Manager notice ("Google Chrome is in Stage
-  Manager's side strip…") is clipped.
-- These confirm **Larger Text stays undeclared**. Sufficient Contrast had no audit findings on
-  these screens, but the audit doesn't judge text over the live Mac picture, so it also stays
-  undeclared until measured. iPad not audited yet (it was locked).
-- Evidence: `evidence/live-stabilization-2026-10-30/audit-iphone*.log` and `.xcresult`.
+- 主页：6 个问题。“部分不支持动态字体大小”出现在“如何连接”、Mac 名称、“附近”、
+  “此设备”和“试用演示”上；Mac 名称被裁切。
+- 实时窗口模式会话：1 个问题。台前调度通知（"Google Chrome is in Stage
+  Manager's side strip…"）被裁切。
+- 这些确认**更大字体仍需保持未声明**。足够对比度在这些屏幕上没有审计发现，
+  但审计不会判断实时 Mac 画面上的文字，因此它也保持未声明，直到实际测量。
+  iPad 尚未审计（已锁定）。
+- 证据：`evidence/live-stabilization-2026-10-30/audit-iphone*.log` 和 `.xcresult`。
 
-### Owner's device check (about 15 minutes per device)
+### 所有者的设备检查（每台设备约 15 分钟）
 
-Turn on VoiceOver (Settings ▸ Accessibility ▸ VoiceOver, or triple-click the side button if set up).
-1. Home: swipe through. Each Mac should read its name and status. Double-tap Connect.
-2. Hear "Connected to <Mac>". Swipe to the Mac screen; it reads "Mac screen". Double-tap it:
-   you hear how to turn on Direct Touch, and **nothing happens on the Mac**. Touch around the
-   picture: nothing happens on the Mac. Then Actions ▸ Turn On Direct Touch: touches now reach
-   the Mac. Find Mac screen again and Turn Off Direct Touch.
-3. Tray: swipe through the keys (Command, Option, Control, Escape, Keyboard and so on). Double-tap
-   Command and hear "On".
-4. Request Control (on a session without control): double-tap, then approve on the Mac. You should
-   hear the result.
-5. Window mode: swipe to a pane ("<title> pane, button"), double-tap to focus it, then find "Resize
-   tiles" and swipe up or down.
-6. Settings ▸ Input ▸ Stage Manager: turn it off and on.
-7. Remote Files: open a folder and hear the notices.
-8. Turn VoiceOver off. With Voice Control on, say "Tap Connect", "Tap Cmd", "Tap Esc" and "Show names".
-9. Larger Text: set the largest size (Accessibility ▸ Display & Text Size ▸ Larger Text), then check
-   Home, pairing and Settings. Expect the in-session tray not to grow.
+打开 VoiceOver（设置 ▸ 辅助功能 ▸ VoiceOver，或如果已设置则三击侧边按钮）。
+1. 主页：滑动浏览。每台 Mac 应朗读其名称和状态。双击“连接”。
+2. 听到“已连接到 <Mac>”。滑动到 Mac 画面；它会朗读 "Mac screen"。双击它：
+   会听到如何开启直接触控，且 **Mac 上没有任何反应**。在画面周围触摸：
+   Mac 上没有任何反应。然后 操作 ▸ 开启直接触控：触摸现在可以到达
+   Mac。再次找到 Mac screen 并关闭直接触控。
+3. 托盘：滑动浏览各按键（Command、Option、Control、Escape、键盘等）。双击
+   Command 并听到“开”。
+4. 请求控制（在没有控制权的会话中）：双击，然后在 Mac 上批准。应能
+   听到结果。
+5. 窗口模式：滑动到某个窗格（“<标题> 窗格，按钮”），双击以聚焦，然后找到“调整
+   磁贴大小”并上滑或下滑。
+6. 设置 ▸ 输入 ▸ 台前调度：将其关闭再开启。
+7. 远程文件：打开一个文件夹并听取通知。
+8. 关闭 VoiceOver。开启 Voice Control，说出“点按连接”、“点按 Cmd”、“点按 Esc”和“显示名称”。
+9. 更大字体：设置为最大字号（辅助功能 ▸ 显示与文字大小 ▸ 更大字体），然后检查
+   主页、配对和设置。预期会话内托盘不会变大。
 
-If steps 1–7 work on both devices, declare VoiceOver. If step 8 works, declare Voice Control.
+如果步骤 1–7 在两台设备上都可用，则声明 VoiceOver。如果步骤 8 可用，则声明 Voice Control。
 
 ## Google Play
 
-Play has no per-feature accessibility declaration like Apple's. Accessibility shows in the listing
-text and in Play's pre-launch report (an automated scan that runs on closed-test uploads).
+Play 没有像 Apple 那样按功能声明辅助功能。辅助功能体现在商店列表文字和
+Play 的预发布报告（在封闭测试上传时运行的自动扫描）中。
 
-Suggested listing sentence, once the TalkBack check passes:
-> Works with TalkBack and Voice Access: controls, settings and pairing are labelled, status changes
-> are announced, and text scales with your font size. The Mac's screen itself is a live picture.
+建议的列表句子（TalkBack 检查通过后）：
+> 支持 TalkBack 和 Voice Access：控件、设置和配对均有标签，状态变化
+> 会被朗读，文字会随你的字体大小缩放。Mac 屏幕本身是一幅实时画面。
 
-TalkBack check: steps 1–7 above, with TalkBack gestures. **The Moto has no TalkBack** (LineageOS
-without Google services), so this needs TalkBack installed on it (owner's call) or another
-Android phone.
+TalkBack 检查：使用 TalkBack 手势执行上述步骤 1–7。**Moto 没有 TalkBack**
+（无 Google 服务的 LineageOS），因此需要在其上安装 TalkBack（由所有者决定）或使用另一台
+Android 手机。
 
-Known Android gaps (from the pass):
-- Tray chips are 40 dp. Their size comes from the shared core layout geometry, so changing them
-  changes the layout on every device.
-- Pane title labels are 26–30 dp tall, below 48 dp.
-- The brand blue #007AFF on white is about 4.0:1, under the 4.5:1 that small text needs. The
-  pre-launch report may flag it.
-- Dragging a window onto a pane has no non-touch equivalent.
+已知 Android 缺口（来自本轮工作）：
+- 托盘小标签为 40 dp。其大小来自共享核心布局几何，因此更改它们
+  会改变每台设备上的布局。
+- 窗格标题标签高 26–30 dp，低于 48 dp。
+- 品牌蓝 #007AFF 在白底上的对比度约为 4.0:1，低于小号文字所需的 4.5:1。
+  预发布报告可能会标记它。
+- 将窗口拖到窗格上的操作没有非触摸替代方式。
 
-## App Review notes (paste-ready, optional)
+## App Review 备注（可直接粘贴，可选）
 
-> MeowDisplay shows a live picture of the user's Mac. Around that picture, everything is accessible:
-> pairing, connecting, the control tray, Settings, Window-mode panes and Remote Files support
-> VoiceOver and Voice Control. The Mac picture itself is one "Mac screen" element with direct
-> interaction, so VoiceOver users can touch it to control the Mac. The Mac's own contents can't be
-> read by VoiceOver on the phone; VoiceOver on the Mac covers that.
+> MeowDisplay 显示用户 Mac 的实时画面。在画面周围，一切均可访问：
+> 配对、连接、控制托盘、设置、窗口模式窗格和远程文件都支持
+> VoiceOver 和 Voice Control。Mac 画面本身是一个支持直接
+> 交互的 "Mac screen" 元素，因此 VoiceOver 用户可以触摸它来控制 Mac。手机上的 VoiceOver
+> 无法读取 Mac 自身的内容；Mac 上的 VoiceOver 可覆盖这一点。
 
-## Not covered
+## 未涵盖
 
-- The Mac app (sender) had no accessibility pass in this round.
-- The Performance overlay is a diagnostics view and is not accessible.
-- New iOS strings are not yet in Localizable.xcstrings. The app is English-only today, so nothing
-  changes for users; add them before adding a language.
-- iPad Strip and Custom layouts were reviewed in code only.
+- Mac App（发送端）本轮未进行辅助功能工作。
+- 性能叠层是诊断视图，不具备辅助功能。
+- 新的 iOS 字符串尚未加入 Localizable.xcstrings。App 目前仅提供英文，因此用户侧
+  没有变化；在添加语言前应先加入这些字符串。
+- iPad 侧边条和自定义布局仅在代码中评审。

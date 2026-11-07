@@ -1,70 +1,67 @@
-# Receiver feature parity
+# 接收端功能对等
 
-ExtendPad supports Android and Mac receivers connected to a Mac sender.
-Implementation does not imply physical verification on every device or OS
-version.
+ExtendPad 支持连接到 Mac 发送端的 Android 和 Mac 接收端。实现并不代表在
+每台设备或每个操作系统版本上都经过了物理验证。
 
-**Yes** = implemented · **Partial** = implemented with the noted limitation ·
-**No** = not implemented · **—** = not applicable.
+**是** = 已实现 · **部分** = 已实现但存在所述限制 · **否** = 未实现 ·
+**—** = 不适用。
 
-## Connections
+## 连接
 
-| Feature | Android | Mac Receiver |
+| 功能 | Android | Mac 接收端 |
 | --- | --- | --- |
-| Pairing with a matching code | Yes | Yes |
-| Local Wi-Fi/Bonjour discovery | Yes | Yes |
-| Receiver-initiated Connect, with the Mac dialing | Yes | Yes |
-| USB | Yes, authorized ADB tunnel (AOA path staged; some OEM firmware does not switch) | Network routes, including wired networking |
-| Remote Access through a private network | Yes | Yes |
-| Per-session connection approval | Yes | Yes |
-| Auto-Reconnect | Yes | Yes |
-| Wake & Connect | Yes, subject to network/hardware limits | Yes, subject to network/hardware limits |
+| 使用匹配码配对 | 是 | 是 |
+| 本地 Wi-Fi/Bonjour 发现 | 是 | 是 |
+| 接收端发起连接，由 Mac 拨号 | 是 | 是 |
+| USB | 是，经授权的 ADB 隧道（AOA 路径已就绪；部分 OEM 固件不会切换） | 网络路线，包括有线网络 |
+| 通过私有网络的远程访问 | 是 | 是 |
+| 每会话连接批准 | 是 | 是 |
+| 自动重连 | 是 | 是 |
+| 唤醒并连接 | 是，受网络/硬件限制 | 是，受网络/硬件限制 |
 
-## Display and audio
+## 显示与音频
 
-| Feature | Android | Mac Receiver |
+| 功能 | Android | Mac 接收端 |
 | --- | --- | --- |
-| Mirror and Extend | Yes | Yes |
-| Window mode and up to nine tiles | Yes, subject to available space | Yes, subject to available space |
-| Tile arrangement, rotation and switching | Yes | Yes |
-| Foldable/hinge-aware layouts | Yes | — |
-| Streaming profile, frame rate and display requests | Yes, capability-gated | Yes, capability-gated |
-| Mac system audio | Yes | Yes |
-| A/V Sync and Resync | Yes | Yes |
-| Picture in Picture | Yes | — |
-| Performance overlay | Yes | Yes |
+| 镜像和扩展 | 是 | 是 |
+| 窗口模式和最多九个磁贴 | 是，受可用空间限制 | 是，受可用空间限制 |
+| 磁贴排列、旋转和切换 | 是 | 是 |
+| 折叠屏/铰链感知布局 | 是 | — |
+| 串流配置文件、帧率和显示请求 | 是，受能力门控 | 是，受能力门控 |
+| Mac 系统音频 | 是 | 是 |
+| 音画同步和重新同步 | 是 | 是 |
+| 画中画 | 是 | — |
+| 性能叠层 | 是 | 是 |
 
-## Input and controls
+## 输入与控制
 
-| Feature | Android | Mac Receiver |
+| 功能 | Android | Mac 接收端 |
 | --- | --- | --- |
-| Direct Touch and Trackpad modes | Yes | Trackpad/mouse |
-| Keyboard input | Yes | Yes |
-| Per-session Request Control | Yes | Yes |
-| Common Mac system gestures | Yes | Partial, through supported input events |
-| Customizable control trays and profiles | Yes | — |
-| Adaptive phone/tablet/foldable controls | Yes | — |
-| Hardware keyboard/mouse | Partial; device-dependent | Yes |
-| Stylus input | Partial; device-dependent | — |
+| 直接触控和触控板模式 | 是 | 触控板/鼠标 |
+| 键盘输入 | 是 | 是 |
+| 每会话请求控制 | 是 | 是 |
+| 常见 Mac 系统手势 | 是 | 部分，通过支持的输入事件 |
+| 可自定义控制托盘和配置文件 | 是 | — |
+| 手机/平板/折叠屏自适应控制 | 是 | — |
+| 硬件键盘/鼠标 | 部分；取决于设备 | 是 |
+| 触控笔输入 | 部分；取决于设备 | — |
 
-## Files, clipboard and diagnostics
+## 文件、剪贴板与诊断
 
-| Feature | Android | Mac Receiver |
+| 功能 | Android | Mac 接收端 |
 | --- | --- | --- |
-| Remote Finder browsing and previews | Yes, with Mac owner permission | No |
-| Remote Finder uploads and file operations | Yes, with the matching permission | No |
-| Unified Clipboard | Yes, opt-in on both sides | No |
-| Connection diagnostics | Yes | Yes |
+| 远程访达浏览和预览 | 是，需 Mac 所有者许可 | 否 |
+| 远程访达上传和文件操作 | 是，需相应权限 | 否 |
+| 统一剪贴板 | 是，双方均需主动启用 | 否 |
+| 连接诊断 | 是 | 是 |
 
-## Verification limits
+## 验证边界
 
-- Mac-to-Mac keyboard/trackpad forwarding has automated coverage, but
-  physical two-Mac verification remains limited.
-- Android unit and emulator coverage does not establish every physical
-  device's touch, stylus, audio, keyboard, foldable or OEM behavior.
-- USB requires an authorized ADB connection and currently supports one
-  Android device at a time.
-- No Windows or Linux sender is provided.
+- Mac 对 Mac 键盘/触控板转发有自动化覆盖，但两台 Mac 的物理验证仍然有限。
+- Android 单元和模拟器覆盖不能证明每台物理设备的触摸、触控笔、音频、键盘、
+  折叠屏或 OEM 行为。
+- USB 需要经授权的 ADB 连接，目前一次只支持一台 Android 设备。
+- 不提供 Windows 或 Linux 发送端。
 
-See [SETUP.md](SETUP.md) for setup and
-[RECEIVER_CONTROLS.md](RECEIVER_CONTROLS.md) for control behavior.
+设置见 [SETUP.md](SETUP.md)，控制行为见
+[RECEIVER_CONTROLS.md](RECEIVER_CONTROLS.md)。

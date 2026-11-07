@@ -1,145 +1,136 @@
-# Multiple devices: per-device Mirror/Extend
+# 多设备：每台设备独立的镜像/扩展
 
-Each connected iPhone, iPad, Android device or receiving Mac can have
-its own Mirror/Extend selection ([completed issue #20](https://github.com/raiseCatError/meowdisplay/issues/20)).
-One device can mirror the Mac's built-in display while other receivers
-extend it as separate desktops, and changing one device doesn't reset
-another receiver's mode.
+每台已连接的 iPhone、iPad、Android 设备或接收 Mac 都可以有
+自己独立的镜像/扩展选择（[已完成的 issue #20](https://github.com/raiseCatError/meowdisplay/issues/20)）。
+一台设备可以镜像 Mac 的内置显示器，而其他接收端把它扩展为
+独立桌面；更改一台设备不会重置另一台接收端的模式。
 
-**Verification update (2026-10-31):** The maintainer confirms working
-multi-device behavior was physically verified; issue #20 is closed. The
-scenario checklist below remains a useful reproducible regression checklist,
-not a record proving that every individual edge case was exercised.
-Mac-to-Mac *input forwarding* is a separate, still physically unverified
-feature ([#12](https://github.com/raiseCatError/meowdisplay/issues/12)).
+**验证更新（2026-10-31）：** 维护者确认多设备正常工作行为已经过
+物理验证；issue #20 已关闭。下面的场景清单仍然是有用的可复现回归清单，
+而不是证明每个单独边界情况都已被执行的记录。
+Mac 对 Mac 的*输入转发*是另一项仍未经过物理验证的功能
+（[#12](https://github.com/raiseCatError/meowdisplay/issues/12)）。
 
-## How it works
+## 工作原理
 
-Every connected device already had its own `MacSender` pipeline: its own
-virtual display (Extend), ScreenCaptureKit stream, encoder and connection.
-What made devices share a mode was the Mac-wide `mode` and
-`mirrorDisplayUUID` settings that every pipeline was built from, plus
-`restartAll()`, which rebuilt every device whenever either changed.
+每台已连接设备本来就有自己的 `MacSender` 流水线：自己的
+虚拟显示器（扩展）、ScreenCaptureKit 流、编码器和连接。
+让设备共享模式的，是每条流水线构建时所依据的 Mac 全局 `mode` 和
+`mirrorDisplayUUID` 设置，以及
+`restartAll()`——只要其中任一设置变化，它就会重建每台设备。
 
-| Piece | Where | Role |
+| 部件 | 位置 | 角色 |
 | --- | --- | --- |
-| Per-device choice | `DeviceDisplayModeStore` | Mode and Mirror source per receiver install id (`displayMode.<id>` in the Mac's defaults). Unset fields follow the Mac default. |
-| Mac defaults | `SenderController.mode`, `.mirrorDisplayUUID` | The pre-#20 global settings, same storage, now the default for devices without their own choice. |
-| Authority | `DisplayModeCoordinator` | Resolves each live session's assignment and names exactly the sessions a change must rebuild. |
-| Live assignment | `DeviceSession.displayAssignment` | What that session's pipeline was actually built with. |
-| Rebuild | `SenderController.rebuild(_:)` | `restartAll()` for one session: same teardown, same carried invitation. |
-| Mirror source | `MirrorSourceResolver` | Automatic, capture recovery and wake recovery skip MeowDisplay virtual displays. |
-| Live virtual displays | `VirtualDisplayRegistry` | Every MeowDisplay virtual display alive in this process and its owning session; `VirtualDisplay` registers for its own lifetime. |
-| Display identity | `VirtualDisplayIdentityPlanner` | An Extend display skips a serial/product identity another live session holds. |
+| 每设备选择 | `DeviceDisplayModeStore` | 每个接收端安装 id 的模式和镜像源（Mac 默认设置中的 `displayMode.<id>`）。未设置的字段沿用 Mac 默认值。 |
+| Mac 默认值 | `SenderController.mode`、`.mirrorDisplayUUID` | #20 之前的全局设置，存储位置相同，现在作为没有单独选择的设备的默认值。 |
+| 权威 | `DisplayModeCoordinator` | 解析每个活动会话的分配，并准确列出变更必须重建哪些会话。 |
+| 活动分配 | `DeviceSession.displayAssignment` | 该会话的流水线实际使用的配置。 |
+| 重建 | `SenderController.rebuild(_:)` | 针对单个会话的 `restartAll()`：相同的拆除，相同的沿用邀请。 |
+| 镜像源 | `MirrorSourceResolver` | 自动、采集恢复和唤醒恢复会跳过 MeowDisplay 虚拟显示器。 |
+| 活动虚拟显示器 | `VirtualDisplayRegistry` | 本进程内每个存活的 MeowDisplay 虚拟显示器及其所属会话；`VirtualDisplay` 在自身生命周期内注册。 |
+| 显示身份 | `VirtualDisplayIdentityPlanner` | 扩展显示器会跳过另一个活动会话已占用的序列号/产品身份。 |
 
-All of these except the controller and views are Foundation/CoreGraphics
-only and run in the hostless `OpenSidecarMacTests` bundle.
+除控制器和视图外，这些都是仅依赖 Foundation/CoreGraphics 的代码，并在
+无宿主的 `OpenSidecarMacTests` 测试包中运行。
 
-### What changes what
+### 什么会改变什么
 
-| Event | Effect |
+| 事件 | 效果 |
 | --- | --- |
-| Displays → Default Display Mode / Default Mirror Display | Rebuilds only devices that follow the default and now capture differently. |
-| Device settings → Display Mode / Mirror Display | That device only; remembered for it. **Mac Default** returns it to following the default. |
-| The receiver's own Mirror/Extend or Mirror display control | That device only; remembered for it. |
-| Connect with Mirror / Connect with Extend | That device only; remembered for it. |
-| Session approval (Allow & Mirror / Allow & Extend) | That device only. |
-| Video Off (Mac-wide) | With a physical display: every Extend device moves to Mirror in place (no reconnect), the default becomes Mirror, and a device whose own choice was Extend now remembers Mirror. Video On never restores Extend. Headless: nothing changes mode. |
-| Streaming profile, priority, codec, quality | Still Mac-wide `restartAll()`; each device keeps its own mode across it. |
-| Forget | Removes the device's display mode with its other per-device state. |
+| 显示器 → 默认显示模式 / 默认镜像显示器 | 只重建那些跟随默认值、且现在采集方式发生变化的设备。 |
+| 设备设置 → 显示模式 / 镜像显示器 | 仅该设备；并为其记住。**Mac 默认**会让它重新跟随默认值。 |
+| 接收端自己的镜像/扩展或镜像显示器控件 | 仅该设备；并为其记住。 |
+| 使用镜像连接 / 使用扩展连接 | 仅该设备；并为其记住。 |
+| 会话批准（允许并镜像 / 允许并扩展） | 仅该设备。 |
+| 关闭视频（Mac 全局） | 有物理显示器时：每台扩展设备就地切换到镜像（无需重连），默认值变为镜像，而自身选择为扩展的设备现在会记住镜像。开启视频从不恢复扩展。无头时：不改变任何模式。 |
+| 串流配置文件、优先级、编解码器、质量 | 仍是 Mac 全局的 `restartAll()`；每台设备在过程中保持自己的模式。 |
+| 忘记 | 移除该设备的显示模式及其其他每设备状态。 |
 
-A rejected request (Mirror without a usable physical display, Extend while
-video is off) leaves that device as it was, tells only that receiver, and
-shows the reason in the device's settings.
+被拒绝的请求（没有可用物理显示器时请求镜像，或在视频关闭时请求扩展）
+会让该设备保持原状，只通知该接收端，并在设备设置中显示原因。
 
-### Mirror source and lost displays
+### 镜像源与丢失的显示器
 
-- **Automatic** is the first capturable display that is not a MeowDisplay
-  virtual display. Before #20 it was simply the first display, which with an
-  Extend device connected could be that device's desktop. With no
-  MeowDisplay displays present, behavior is unchanged.
-- An explicit pick of another device's extended desktop is honored, so a
-  phone can deliberately mirror an iPad's Extend desktop.
-- If the chosen display is missing at start, the device mirrors Automatic and
-  keeps its choice; the picker says so. If the mirrored display disappears
-  mid-session, capture recovery moves to Automatic under the same exclusion.
-  If only MeowDisplay displays remain, Mirror fails with the existing
-  "No display available to mirror" error instead of mirroring another device.
+- **自动**是第一块可采集且不是 MeowDisplay 虚拟显示器的显示器。在 #20
+  之前，它只是第一块显示器；连接了扩展设备时，那可能是该设备的桌面。
+  没有 MeowDisplay 显示器存在时，行为不变。
+- 显式选择另一台设备的扩展桌面会被尊重，因此手机可以刻意镜像 iPad 的
+  扩展桌面。
+- 如果启动时所选显示器缺失，设备会镜像“自动”并保留其选择；选择器会说明
+  这一点。如果镜像的显示器在会话中途消失，采集恢复会在同样的排除规则下
+  转到“自动”。如果只剩 MeowDisplay 显示器，镜像会以现有的
+  “没有可供镜像的显示器”错误失败，而不是去镜像另一台设备。
 
-### No protocol change
+### 无协议变更
 
-`displayModeRequest`, `displayModeState`, `mirrorDisplayRequest` and
-`mirrorDisplayState` were already per connection. Existing iPhone, iPad and
-Mac receivers work unchanged. Their mode control now affects only themselves.
+`displayModeRequest`、`displayModeState`、`mirrorDisplayRequest` 和
+`mirrorDisplayState` 一直是按连接区分的。现有 iPhone、iPad 和
+Mac 接收端无需改动即可工作。它们的模式控制现在只影响自己。
 
-### Limits
+### 限制
 
-- macOS decides how many virtual displays and simultaneous captures the Mac
-  can sustain. MeowDisplay sets no limit of its own and has not measured one.
-- A device without a known install id when it connects (a USB device whose
-  install id isn't resolved yet) starts with the Mac default. Its own choice
-  is applied by rebuilding that session once its hello authenticates.
-- Changing a device's mode restarts that device's stream (a short reconnect)
-  and, like any new connection, its input grant: it must request control
-  again. Other devices are not touched.
+- macOS 决定 Mac 能维持多少块虚拟显示器和多少路同时采集。
+  MeowDisplay 不设自己的限制，也没有测量过。
+- 连接时没有已知安装 id 的设备（例如安装 id 尚未解析的 USB 设备）
+  会以 Mac 默认值开始。它自己的选择会在其 hello 认证通过后
+  通过重建该会话应用。
+- 更改设备模式会重启该设备的流（短暂重连），并且和任何新连接一样，
+  其输入授权也会重启：必须重新请求控制。其他设备不受影响。
 
-## Automated coverage
+## 自动化覆盖
 
-`MacTests/DisplayModeAssignmentTests.swift` drives the real coordinator and
-registry with synthetic receivers:
+`MacTests/DisplayModeAssignmentTests.swift` 用合成接收端驱动
+真实的协调器和注册表：
 
-- Mirror + Extend, Extend + Extend, Mirror + Mirror (different sources)
-- three receivers (the issue's table) and five in every mix
-- changing one device while others are active; default changes reaching only
-  followers
-- interleaved connects and disconnects with no leaked entries or displays;
-  a receiver crash mid-switch; route changes; sender restart from the store
-- a USB session identified late; staged one-off choices
-- rejections (no physical display, Video Off, ended session)
-- Video Off and Video On semantics
-- Automatic exclusion, explicit pick of a MeowDisplay display, a lost
-  selected display, recovery after the mirrored display is unplugged
-- identity collisions and registry ownership, including a late release of an
-  old display
-- input from three receivers landing in three different display rectangles
+- 镜像 + 扩展、扩展 + 扩展、镜像 + 镜像（不同来源）
+- 三台接收端（issue 中的表格）以及每种组合中的五台
+- 在其他设备活动时更改一台设备；默认值变化只影响跟随者
+- 交错的连接和断开，不泄漏条目或显示器；接收端在切换中途崩溃；
+  路线变化；发送端从存储重启
+- 延迟识别的 USB 会话；分阶段的一次性选择
+- 拒绝（没有物理显示器、视频关闭、会话已结束）
+- 关闭视频和开启视频的语义
+- 自动排除、显式选择 MeowDisplay 显示器、所选显示器丢失、
+  镜像显示器拔出后的恢复
+- 身份冲突和注册表所有权，包括旧显示器的延迟释放
+- 来自三台接收端的输入落到三个不同的显示矩形中
 
-These prove the decision logic. They do not prove WindowServer,
-ScreenCaptureKit or multi-device hardware behavior.
+这些测试证明了决策逻辑。它们不能证明 WindowServer、
+ScreenCaptureKit 或多设备硬件行为。
 
-## Physical test checklist
+## 物理测试清单
 
-Needs one Mac with a built-in display (plus an external display for the
-Mirror-source rows), an iPhone and two iPads (or an iPad and a receiving Mac),
-all paired. Run on a build from this branch.
+需要一台带内置显示器的 Mac（镜像源相关的行还需要一台外接显示器）、
+一部 iPhone 和两台 iPad（或一台 iPad 和一台接收 Mac），
+全部完成配对。在本分支的构建上运行。
 
-1. **Single device, unchanged.** One iPhone: switch Mirror ⇄ Extend from the
-   Displays page and from the iPhone. Both work as in 1.20.0.
-2. **Mirror + Extend.** iPad A Extend, then iPhone → Mirror from the iPhone.
-   iPad A keeps its desktop and windows, no reconnect. iPhone shows the
-   built-in display, not iPad A's desktop.
-3. **Extend + Extend.** iPad A and iPad B in Extend: System Settings →
-   Displays shows two separate MeowDisplay displays; arrange them apart; drag
-   a window onto each.
-4. **The issue's table.** iPad A Extend · iPhone Mirror · iPad B Extend at
-   once. Touch on each device lands on its own screen.
-5. **Switch one while others stream.** Change iPad B to Mirror from its device
-   settings: only iPad B reconnects; iPad A's display, window placement and
-   input grant survive.
-6. **Mirror + Mirror.** With an external display: iPhone mirrors built-in,
-   iPad mirrors the external display (each from its device settings).
-7. **Lost display.** While a device mirrors the external display, unplug it:
-   that device moves to the built-in display (not an iPad's desktop); the
-   others are unaffected. Plug it back and reselect.
-8. **Defaults.** Set Default Display Mode to Mirror: only devices on
-   **Mac Default** switch.
-9. **Reconnect and restart.** Disconnect and reconnect each device, then quit
-   and relaunch the Mac app: every device returns in its own mode, and
-   System Settings → Displays shows no leftover MeowDisplay displays after
-   all devices disconnect.
-10. **Video Off.** With two Extend devices, turn Video Off: both move to
-    Mirror without reconnecting. Turn it back on: both stay in Mirror.
-11. **Headless.** On a Mac with no active physical display (for example a
-    Mac mini with its monitor unplugged) and one device extending: a Mirror
-    request from that device is refused with a message on that device only.
-12. **Forget.** Forget a device with its own mode, pair again: it follows the
-    Mac default.
+1. **单台设备，行为不变。** 一部 iPhone：在“显示器”页面和
+   iPhone 上切换镜像 ⇄ 扩展。两者都像 1.20.0 中一样工作。
+2. **镜像 + 扩展。** iPad A 扩展，然后 iPhone 从 iPhone 上 → 镜像。
+   iPad A 保持其桌面和窗口，无需重连。iPhone 显示
+   内置显示器，而不是 iPad A 的桌面。
+3. **扩展 + 扩展。** iPad A 和 iPad B 处于扩展：系统设置 →
+   显示器显示两台独立的 MeowDisplay 显示器；把它们分开排列；分别
+   拖一个窗口到每台上。
+4. **issue 中的表格。** iPad A 扩展 · iPhone 镜像 · iPad B 扩展
+   同时进行。在每台设备上触摸都会落到它自己的屏幕上。
+5. **在其他设备串流时切换一台。** 从 iPad B 的设备设置把它改为镜像：
+   只有 iPad B 重连；iPad A 的显示器、窗口位置和
+   输入授权保持。
+6. **镜像 + 镜像。** 有一台外接显示器时：iPhone 镜像内置显示器，
+   iPad 镜像外接显示器（各自从自己的设备设置操作）。
+7. **显示器丢失。** 当某台设备正在镜像外接显示器时，拔掉它：
+   该设备转到内置显示器（而不是 iPad 的桌面）；
+   其他设备不受影响。重新插上并重新选择。
+8. **默认值。** 把默认显示模式设为镜像：只有处于
+   **Mac 默认** 的设备会切换。
+9. **重连与重启。** 断开并重新连接每台设备，然后退出
+   并重新启动 Mac 应用：每台设备都以自己的模式返回，并且
+   在所有设备断开后，系统设置 → 显示器不会显示残留的 MeowDisplay 显示器。
+10. **关闭视频。** 有两台扩展设备时，关闭视频：两者都
+    切换到镜像且无需重连。重新开启：两者都保持镜像。
+11. **无头。** 在没有活动物理显示器的 Mac 上（例如
+    显示器已拔掉的 Mac mini），有一台设备正在扩展：来自该设备的镜像
+    请求会被拒绝，且只在该设备上显示消息。
+12. **忘记。** 忘记一台有自己模式的设备，重新配对：它会跟随
+    Mac 默认值。

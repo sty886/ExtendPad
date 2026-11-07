@@ -1,232 +1,232 @@
-<!-- Sanitized copy of the integration folder's COMPLETION-MATRIX.md (2026-10-31). Local paths and personal names removed; the integration folder holds the original and evidence. -->
+<!-- 集成文件夹中 COMPLETION-MATRIX.md 的脱敏副本（2026-10-31）。本地路径和个人姓名已移除；原件与证据保存在集成文件夹中。 -->
 
-# MeowDisplay 2.x requirement status (2026-10-28, completion pass)
+# MeowDisplay 2.x 需求状态（2026-10-28，完成度检查）
 
-> Android parity, USB and Tailscale rows are superseded by RECONCILIATION-2026-10-29.md (read from the code).
+> Android 对齐、USB 和 Tailscale 相关行已被 RECONCILIATION-2026-10-29.md 取代（依据代码阅读）。
 
-COMPLETE = built, tested, and seen working where the hardware exists · PARTIAL = works with a named gap ·
-MISSING = not built · BLOCKED = needs hardware/OS we don't have or may not touch · NOT VERIFIED = built and unit-tested, never run end to end.
-Evidence paths are relative to this folder. Commits on `feature/android-secure-core`.
+COMPLETE = 已构建、已测试，并在有硬件的情况下确认可用 · PARTIAL = 可用但存在已指明的缺口 ·
+MISSING = 未构建 · BLOCKED = 需要我们没有或不适合触碰的硬件/操作系统 · NOT VERIFIED = 已构建并通过单元测试，但从未端到端运行。
+证据路径相对于本文件夹。提交位于 `feature/android-secure-core`。
 
-| Requirement | Status | Evidence / gap |
+| 需求 | 状态 | 证据 / 缺口 |
 | --- | --- | --- |
-| Mirror, Extend, Window modes | COMPLETE (Android), NOT VERIFIED (iOS, Mac Receiver on hardware) | W10, W14 on the Moto; iOS by rule not run on devices |
-| Per-receiver source independence | COMPLETE (unit + single receiver physical) | one engine per receiver; ReceiverOwnershipTests; two receivers at once not run physically |
-| Up to 3 phone tiles | COMPLETE | Moto 3 tiles (W10/28), presets capped at 3 (W14 p1) |
-| Up to 9 tablet tiles | PARTIAL | layouts + capacity tested (Swift/Kotlin vectors, tablet emulator); 9 live captures never run (no tablet hardware); budget prefers the active tile |
-| Snapping, swapping, dragging, divider resizing | COMPLETE (Android physical), NOT VERIFIED (iOS UI) | W14 p1; fixed 28a1ed4 |
-| Independent 0/90/180/270 tile rotation | COMPLETE | Moto clicks exact at 0 and 90 (W10 probe logs) |
-| Unified cursor, hovered vs active vs Mac focus | COMPLETE (Android) | active border + pill, Typing paused when Mac focus differs (W10/25) |
-| Safe per-window input routing | COMPLETE | raise-on-press, drag bound to its tile, keyboard gate (373ff6e, tests) |
-| Physical keyboard/mouse/trackpad | PARTIAL / BLOCKED | code + tests on all; no Bluetooth/OTG peripheral attached to the Moto; iOS devices off-limits |
-| Three-finger hold overview | COMPLETE (Android) | W10 |
-| Movable collapsible window selector | COMPLETE (Android) | rail edges persisted; handle no longer covers tile pills (28a1ed4) |
-| Headless Mac | PARTIAL | Window mode uses any existing display (incl. an Extend virtual display); with none it says to use Extend. No per-tile virtual displays by design. Not run headless (no such Mac) |
-| Stage Manager and Spaces | PARTIAL / BLOCKED | covered windows, other-Space and off-screen windows capture (W1); Stage Manager is off here (`GloballyEnabled=0`) and was not toggled; full-screen Space not run (would move the user's screen) |
-| Android and iPhone Duo foldable layouts | COMPLETE (Android emulator), NOT VERIFIED (iPhone Duo) | Android emulator hinge (6d23b19); iOS hinge logic unit-tested; Duo simulator check skipped at the user's request |
-| Multiple sending Macs in a workspace | PARTIAL | per-Mac layouts and window identity (test W14); a single workspace mixing two Macs' tiles is not built; two-Mac physical BLOCKED |
-| Multiple macOS user sessions | PARTIAL | each account is its own sender (SAME_MAC_SESSIONS.md); simultaneous capture of an inactive session is impossible on macOS |
-| Unified and standalone Mac Receiver | NOT VERIFIED | builds; two-Mac QA BLOCKED |
-| Android/iOS feature parity | PARTIAL | Android lacks the editors, USB and display/stream settings; Demo (213a0a5) and Remote (60bb1e4) are done |
-| Connection instructions, terminology, onboarding | COMPLETE | TERMINOLOGY.md, Android Help & About, iOS How to Connect (2640788, 3b826f8) |
-| Tailscale discovery, USB transports | PARTIAL | Remote (Tailscale/VPN) on all receivers incl. Android (manual address; no tailnet enumeration by design); USB still Apple-only |
-| Security findings and regressions | COMPLETE | F1/F2/F3 + 9 review findings; suites green |
-| Picture in Picture (Android) | COMPLETE | 0ae4cd8, Moto |
-| Performance overlay (Android) | COMPLETE | a1d7a64, Moto; it found the decoder fallback fixed in 381adce |
-| Negative A/V offset (Android) | COMPLETE | 37f43bd, Moto |
-| Custom layout editor, Function Tray chord editor (Android) | MISSING | large UI features; iOS has them |
-| iOS hardware keyboard/pointer | NOT VERIFIED | code in f6b9904; devices off-limits |
-| iOS simulator UI tests | COMPLETE | 9/9 on iPhone 18 Pro sim (3 needed a rerun: timing under load) |
-| iPhone/iPad physical QA | COMPLETE (2026-10-31) | iPhone since 2026-10-29; iPad (9th gen, iPadOS 27.0.1) hands-on by the owner on 2000053–2000058, see "iPad QA 2026-10-31" below |
-| Two-Mac and physical foldable QA | BLOCKED (hardware) | not run |
-| Natural Touch (Direct Touch default) | COMPLETE | Swift+Kotlin engine, fixtures, Window-mode tests, iOS UI 10/10, Moto ADB QA (REPORT: Natural Touch); human-finger feel not verified |
-| Stage Peek window switcher (iOS + Android) | COMPLETE | both platforms built and tested; Moto ADB QA and an on-device iPhone XCUITest against a live Mac, View Only (evidence/SP). iPad verified by hand 2026-10-31 (drag from the peek, one Cancel zone, fixed toolbar, Spatial Overview). Not verified: right edge on a device, TalkBack/VoiceOver walkthroughs |
-| Switching whole screen ↔ Window view | COMPLETE | Full Desktop card, "Switch to Window view?" prompt (auto-hides 8 s), Settings → Display Mirror/Extend/Windows; Moto sp14–sp18 |
-| Terminology pass (34 reviewed fixes) | COMPLETE | ff854da, 3145db9, eb3caac; Request Control family; iPhone demo tests on the device; Moto 360 dp Settings pages, no clipping (evidence/TERM) |
-| Minimal home (iPhone + Android) | COMPLETE | 307dfb1, 42f90cc, 89030f3, 36d8c1b, baf0f73; iPhone device shots + Moto incl. 360 dp |
-| Android Remote devices | COMPLETE (Request Control granted over remote: awaiting your authorization) | knock + Mac dial-back, Pair over Remote, saved addresses, bounded recovery, honest route labels. Live over LTE + Tailscale: Mirror 44 fps, Window mode + Stage Peek 52 fps / 64 ms, audio flowing, Wi-Fi on/off mid-stream (kept / Mac redial in 1.3 s), Mac restart recovery, Disconnect stops recovery, Request Control declined correctly with input off. Granted control over remote, live Pair over Remote and Needs approval need Mac-side action |
-| Typing strip on the keyboard | COMPLETE | iOS accessory bar (d3a7469, 45da72f), iPhone device UI test; Android bar (187681a), Moto on-device preview on the real keyboard (bd480c0). iPad floating keyboard not verified |
-| Caret follow (Zoom While Typing) | PARTIAL (unit-tested) | Mac AX caret → `textCaret` message → receivers (d3a7469, 187681a); Swift + Kotlin tests and shared vectors; not run live on a Mac (would type into the user's apps) |
-| Mac knock routing over tunnels | COMPLETE | 36a92fb + c104aa8: tunnel knocks dialed back at their source; 215 routing/remote tests + full suite |
+| 镜像、扩展、窗口模式 | COMPLETE（Android），NOT VERIFIED（iOS、Mac 接收端真机） | Moto 上的 W10、W14；iOS 按规则不在设备上运行 |
+| 每个接收端的源独立 | COMPLETE（单元 + 单接收端物理） | 每个接收端一个引擎；ReceiverOwnershipTests；未物理运行两个接收端同时连接 |
+| 最多 3 个手机磁贴 | COMPLETE | Moto 3 个磁贴（W10/28），预设上限为 3（W14 p1） |
+| 最多 9 个平板磁贴 | PARTIAL | 布局 + 容量已测试（Swift/Kotlin 向量、平板模拟器）；从未运行 9 路实时采集（无平板硬件）；预算优先给活动磁贴 |
+| 吸附、交换、拖拽、分隔条调整 | COMPLETE（Android 物理），NOT VERIFIED（iOS UI） | W14 p1；已修复 28a1ed4 |
+| 独立的 0/90/180/270 磁贴旋转 | COMPLETE | Moto 在 0 和 90 度点按位置精确（W10 探针日志） |
+| 统一光标、悬停 vs 活动 vs Mac 焦点 | COMPLETE（Android） | 活动边框 + 胶囊，Mac 焦点不同时输入暂停（W10/25） |
+| 安全的逐窗口输入路由 | COMPLETE | 按下即置顶、拖拽绑定到所属磁贴、键盘门控（373ff6e，测试） |
+| 物理键盘/鼠标/触控板 | PARTIAL / BLOCKED | 所有平台均有代码 + 测试；Moto 未连接蓝牙/OTG 外设；iOS 设备不可触碰 |
+| 三指长按总览 | COMPLETE（Android） | W10 |
+| 可移动可折叠的窗口选择器 | COMPLETE（Android） | 轨道边缘位置持久化；把手不再遮挡磁贴胶囊（28a1ed4） |
+| 无头 Mac | PARTIAL | 窗口模式使用任何现有显示器（包括扩展虚拟显示器）；没有显示器时会提示使用扩展。按设计不为每个磁贴创建虚拟显示器。未在无头状态下运行（没有这样的 Mac） |
+| 台前调度与空间 | PARTIAL / BLOCKED | 可采集被覆盖窗口、其他空间和屏幕外窗口（W1）；此处台前调度已关闭（`GloballyEnabled=0`）且未切换；未运行全屏空间（会移动用户的屏幕） |
+| Android 与 iPhone Duo 折叠屏布局 | COMPLETE（Android 模拟器），NOT VERIFIED（iPhone Duo） | Android 模拟器铰链（6d23b19）；iOS 铰链逻辑已单元测试；应要求跳过了 Duo 模拟器检查 |
+| 一个工作区中的多台发送 Mac | PARTIAL | 每台 Mac 的布局和窗口标识（测试 W14）；尚未构建混合两台 Mac 磁贴的单一工作区；双 Mac 物理测试 BLOCKED |
+| 多个 macOS 用户会话 | PARTIAL | 每个账户都是独立的发送端（SAME_MAC_SESSIONS.md）；在 macOS 上无法同时采集非活动会话 |
+| 统一版与独立版 Mac 接收端 | NOT VERIFIED | 可构建；双 Mac QA BLOCKED |
+| Android/iOS 功能对齐 | PARTIAL | Android 缺少编辑器、USB 和显示/推流设置；演示（213a0a5）和远程（60bb1e4）已完成 |
+| 连接说明、术语、引导 | COMPLETE | TERMINOLOGY.md、Android 帮助与关于、iOS 如何连接（2640788、3b826f8） |
+| Tailscale 发现、USB 传输 | PARTIAL | 所有接收端（包括 Android）都支持远程（Tailscale/VPN）（手动地址；按设计不枚举 tailnet）；USB 仍仅限 Apple |
+| 安全发现与回归 | COMPLETE | F1/F2/F3 + 9 项评审发现；测试套件全绿 |
+| 画中画（Android） | COMPLETE | 0ae4cd8，Moto |
+| 性能叠层（Android） | COMPLETE | a1d7a64，Moto；它发现了在 381adce 中修复的解码器回退问题 |
+| 负 A/V 偏移（Android） | COMPLETE | 37f43bd，Moto |
+| 自定义布局编辑器、功能托盘组合键编辑器（Android） | MISSING | 大型 UI 功能；iOS 已有 |
+| iOS 物理键盘/指针 | NOT VERIFIED | 代码在 f6b9904 中；设备不可触碰 |
+| iOS 模拟器 UI 测试 | COMPLETE | iPhone 18 Pro 模拟器上 9/9（3 项需要重跑：负载下的时序问题） |
+| iPhone/iPad 物理 QA | COMPLETE（2026-10-31） | iPhone 自 2026-10-29 起；iPad（第 9 代，iPadOS 27.0.1）由所有者在 2000053–2000058 上手动验证，见下文 "iPad QA 2026-10-31" |
+| 双 Mac 与折叠屏物理 QA | BLOCKED（硬件） | 未运行 |
+| 自然触控（直接触控默认） | COMPLETE | Swift+Kotlin 引擎、fixtures、窗口模式测试、iOS UI 10/10、Moto ADB QA（REPORT: Natural Touch）；未验证真人手指手感 |
+| 台前预览窗口切换器（iOS + Android） | COMPLETE | 两个平台均已构建并测试；Moto ADB QA，以及在真机 iPhone 上针对实时 Mac、仅查看模式的 XCUITest（evidence/SP）。iPad 于 2026-10-31 手动验证（从台前预览拖拽、单一“取消”区域、固定工具栏、空间总览）。未验证：设备上的右边缘、TalkBack/VoiceOver 走查 |
+| 整屏 ↔ 窗口视图切换 | COMPLETE | 完整桌面卡片、“切换到窗口视图？”提示（8 秒后自动隐藏）、设置 → 显示 镜像/扩展/窗口；Moto sp14–sp18 |
+| 术语梳理（34 项经评审的修复） | COMPLETE | ff854da、3145db9、eb3caac；请求控制系列；设备上的 iPhone 演示测试；Moto 360 dp 设置页面无裁切（evidence/TERM） |
+| 极简主页（iPhone + Android） | COMPLETE | 307dfb1、42f90cc、89030f3、36d8c1b、baf0f73；iPhone 真机截图 + Moto（包括 360 dp） |
+| Android 远程设备 | COMPLETE（已通过远程授予请求控制：等待你的授权） | 敲门 + Mac 回拨、远程配对、保存的地址、有界恢复、诚实的路由标签。通过 LTE + Tailscale 实时运行：镜像 44 fps，窗口模式 + 台前预览 52 fps / 64 ms，音频正常流动，推流中途开/关 Wi-Fi（保持连接 / Mac 在 1.3 秒内重拨），Mac 重启恢复，断开连接会停止恢复，输入关闭时请求控制被正确拒绝。通过远程授予控制权、实时远程配对和“需要批准”仍需 Mac 侧操作 |
+| 键盘上的输入条 | COMPLETE | iOS 辅助栏（d3a7469、45da72f），iPhone 真机 UI 测试；Android 栏（187681a），Moto 在真实键盘上的设备内预览（bd480c0）。未验证 iPad 浮动键盘 |
+| 光标跟随（输入时缩放） | PARTIAL（已单元测试） | Mac AX 光标 → `textCaret` 消息 → 接收端（d3a7469、187681a）；Swift + Kotlin 测试和共享向量；未在实时 Mac 上运行（会向用户的 App 输入文字） |
+| 隧道上的 Mac 敲门路由 | COMPLETE | 36a92fb + c104aa8：隧道敲门从源地址回拨；215 项路由/远程测试 + 完整套件 |
 
-## 2026-10-30 — briefs of today (branch `feature/v2-hotspot-parity`, local only, nothing pushed)
+## 2026-10-30 — 当日简报（分支 `feature/v2-hotspot-parity`，仅本地，未推送）
 
-Same status words as above. "Unit" = Swift and/or Kotlin tests pass; installed = on the iPhone + iPad (build 2000032 = ca189eb) unless noted. Moto and Mac Dev app are at d379a5a (the Moto wasn't attached for the last install; the Mac sender has no changes since).
+状态词同上。"Unit" = Swift 和/或 Kotlin 测试通过；installed = 已安装到 iPhone + iPad（构建 2000032 = ca189eb），除非另有说明。Moto 和 Mac Dev App 为 d379a5a（上次安装时 Moto 未连接；此后 Mac 发送端无改动）。
 
-| Requirement (brief) | Status | Evidence / gap |
+| 需求（简报） | 状态 | 证据 / 缺口 |
 | --- | --- | --- |
-| A. Free-canvas panning per pane (any edge or corner to the centre, 0.7x–8x, kept on lift) | PARTIAL | a88a3b5; WorkspaceFreePanTests 6/6 + shared workspace vectors (Swift + Kotlin). Gap: empty canvas isn't yet drawn differently from missing video; no physical check |
-| B1. Drag windows and apps from Stage Peek onto panes | PARTIAL (unit) | Windows from the gallery, compact peek and Spatial Overview (75e5266, U3). Apps from the carousel and search results (b5bf4ba): one window goes in, several → chooser, none → offer to open it (control), its first new window lands where dropped; `testAnAppDroppedOnAPanePlacesItsWindowOrAsks`. Gap: Launchpad apps don't drag (the Launchpad covers the panes); no physical check |
-| B2. Tab groups in a pane | PARTIAL (unit) | Add, switch (only the shown tab streams), drag out to split, merge, Remove This Tab vs Close Window on Mac existed. ca189eb adds per-tab rotation / Fit-Fill / zoom (saved with the layout, older records still load) and reorder by dragging along its own labels; `testEachTabKeepsItsOwnViewAndTabsReorder`, Kotlin `WorkspaceTabsTest`. Gap: Full Desktop as a tab not checked; no physical check |
-| B3. Inline Request Control next to every needs-control action | NOT VERIFIED | 68cc73e (iOS), e53759f (Android), ccddbdf (strip/closed tiles, Remote Finder header); the app-drop dialog also offers it (b5bf4ba) |
-| B4. Stage Peek resets temporary filters on every new opening | NOT VERIFIED | 1d10689 (iOS + Android) |
-| B5. Browsing or starting a drag never switches Mirror/Extend to Window mode | COMPLETE (unit) | only a completed drop or a window choice requests Window mode; `testStagePeekBrowsingChangesNothing…`, `testAWindowDroppedOnTheDesktopStartsWindowModeBesideIt` |
-| Stage Manager capture investigation (public + SkyLight lab) | COMPLETE (research) | RESEARCH-2026-10-30-stage-manager-capture-lab.md, evidence/SM-lab/. No method returns the real window from the strip on macOS 27.0; no private API in the app |
-| Turn Off Stage Manager from a device | NOT VERIFIED (awaiting owner) | 8902a1b: runs the owner's two Shortcuts ("MeowDisplay Stage Manager Off/On"), waits for macOS, reports failure; StageManagerSwitchTests 4. Needs the two shortcuts created once |
-| Strip window back on stage restarts sooner (2 s) | COMPLETE (unit) | 8902a1b, WindowCaptureHealthTests |
-| Privacy Shield (remote on, local off by default; unlock with the login password from the Mac's own keyboard; never in the device's picture) | NOT VERIFIED (awaiting owner OK) | d060f8c, 3324ad5 (security fixes), 9965776; PrivacyShieldPolicyTests 7, Kotlin SessionProtocolTest. Not checked on screen: cover absent from the device's picture, apps not throttled under it, the password prompt visible above it |
-| Spatial Overview + Settings ▸ Expanded Layout | PARTIAL (unit) | 5f8bf47 (shared packing, SpatialOverviewTests 5 + Kotlin vectors), d379a5a (iOS + Android views, setting). No physical check |
-| Two windows per row in the phone gallery | NOT VERIFIED (device) | 5a5c562 (shared rule + vectors). The live-Mac iPhone UI test now opens Stage Peek by hold-then-pull (lifting after a hold closes it); its 15:25 run skipped because the iPhone didn't reach Window mode on the Mac within 30 s |
-| Remote Finder Save / Share on iOS | NOT VERIFIED | 60dd727 |
-| iPad smoke test | DONE (2026-10-31) | see "iPad QA 2026-10-31" below |
+| A. 每窗格自由画布平移（任意边缘或角到中心，0.7x–8x，抬起后保持） | PARTIAL | a88a3b5；WorkspaceFreePanTests 6/6 + 共享工作区向量（Swift + Kotlin）。缺口：空白画布尚未与缺失视频区分绘制；无物理检查 |
+| B1. 从台前预览将窗口和 App 拖到窗格 | PARTIAL（单元） | 从画廊、紧凑台前预览和空间总览拖窗口（75e5266、U3）。从轮播和搜索结果拖 App（b5bf4ba）：只有一个窗口时直接放入，多个时弹出选择器，没有时提示打开（需控制权），其第一个新窗口落在放置位置；`testAnAppDroppedOnAPanePlacesItsWindowOrAsks`。缺口：Launchpad 中的 App 无法拖拽（Launchpad 覆盖窗格）；无物理检查 |
+| B2. 窗格中的标签组 | PARTIAL（单元） | 添加、切换（仅显示的标签页推流）、拖出以拆分、合并、移除此标签页 vs 在 Mac 上关闭窗口，这些原本已有。ca189eb 增加了每标签页旋转 / 适应-填充 / 缩放（随布局保存，旧记录仍可加载），以及沿自身标签拖拽重排；`testEachTabKeepsItsOwnViewAndTabsReorder`、Kotlin `WorkspaceTabsTest`。缺口：未检查“完整桌面”作为标签页；无物理检查 |
+| B3. 在每个需要控制权的操作旁内联“请求控制” | NOT VERIFIED | 68cc73e（iOS）、e53759f（Android）、ccddbdf（侧边条/已关闭磁贴、远程 Finder 标题栏）；App 拖放对话框也会提供（b5bf4ba） |
+| B4. 台前预览每次新打开时重置临时筛选 | NOT VERIFIED | 1d10689（iOS + Android） |
+| B5. 浏览或开始拖拽绝不会把镜像/扩展切换到窗口模式 | COMPLETE（单元） | 只有完成的拖放或选择窗口才会请求窗口模式；`testStagePeekBrowsingChangesNothing…`、`testAWindowDroppedOnTheDesktopStartsWindowModeBesideIt` |
+| 台前调度采集调查（公开 API + SkyLight 实验） | COMPLETE（研究） | RESEARCH-2026-10-30-stage-manager-capture-lab.md、evidence/SM-lab/。在 macOS 27.0 上没有任何方法能从侧边条返回真实窗口；App 中不使用私有 API |
+| 从设备关闭台前调度 | NOT VERIFIED（等待所有者） | 8902a1b：运行所有者的两个快捷指令（"MeowDisplay Stage Manager Off/On"），等待 macOS 响应，失败时报告；StageManagerSwitchTests 4。需要先创建这两个快捷指令一次 |
+| 侧边条窗口回到舞台后更快重启（2 秒） | COMPLETE（单元） | 8902a1b、WindowCaptureHealthTests |
+| 隐私护盾（远程开启，本地默认关闭；用 Mac 自身键盘输入登录密码解锁；绝不出现在设备画面中） | NOT VERIFIED（等待所有者确认） | d060f8c、3324ad5（安全修复）、9965776；PrivacyShieldPolicyTests 7、Kotlin SessionProtocolTest。未在屏幕上检查：设备画面中没有遮盖层、其下的 App 未被节流、密码提示显示在其上方 |
+| 空间总览 + 设置 ▸ 展开布局 | PARTIAL（单元） | 5f8bf47（共享排布，SpatialOverviewTests 5 + Kotlin 向量）、d379a5a（iOS + Android 视图、设置）。无物理检查 |
+| 手机画廊每行两个窗口 | NOT VERIFIED（设备） | 5a5c562（共享规则 + 向量）。针对实时 Mac 的 iPhone UI 测试现在通过长按后拉动来打开台前预览（长按后抬起会关闭它）；其 15:25 的运行被跳过，因为 iPhone 未能在 30 秒内进入 Mac 上的窗口模式 |
+| iOS 上的远程 Finder 存储 / 共享 | NOT VERIFIED | 60dd727 |
+| iPad 冒烟测试 | DONE（2026-10-31） | 见下文 "iPad QA 2026-10-31" |
 
-## 2026-10-30 evening — P0 connect, Privacy Shield flicker, Stage Manager setup, Window UI polish, cleanup, Lock Mac
+## 2026-10-30 晚间 — P0 连接、隐私护盾闪烁、台前调度设置、窗口 UI 打磨、清理、锁定 Mac
 
-Branch feature/v2-hotspot-parity (local, not pushed): ff74ca5, 673445b, 0fc5b2d, 103ed8b, b604745, 3a5b3c7.
-Installed: Mac Dev app 103ed8b (~/Applications); iPad iOS 2000036; iPhone still 2000033 (installs refused: "usage assertion", phone locked?); Moto not attached.
+分支 feature/v2-hotspot-parity（本地，未推送）：ff74ca5、673445b、0fc5b2d、103ed8b、b604745、3a5b3c7。
+已安装：Mac Dev App 103ed8b（~/Applications）；iPad iOS 2000036；iPhone 仍为 2000033（安装被拒绝："usage assertion"，手机锁屏？）；Moto 未连接。
 
-| Item | Status | Verified | Not verified / blocked |
+| 项目 | 状态 | 已验证 | 未验证 / 受阻 |
 |---|---|---|---|
-| P0 iPhone can't connect | Root cause found: macOS Local Network privacy blocks the Dev app's outgoing dials (nehelper re-caches per binary UUID; stale LaunchServices copies). Fixes: unique UUID (ebb37cf), run from ~/Applications, one LS registration (swap script), product detection + hint to devices (dc36bd2) | Connected and streamed at 15:57–16:08 (AWDL, ~13 ms; Window mode capture 2.0 s, first frame 2.4 s after admission) | Blocked again since 16:16 for each new build: owner must toggle MeowDisplay Dev off/on in System Settings ▸ Local Network. Mirror/Extend live + reconnect re-check after that |
-| P0 Privacy Shield flicker | Cause proven from the Mac log: cover windows destroyed when the session set emptied, rebuilt after up to 3 s on the next welcome; exposures 0.1–13 s on reconnects. Fixed (ff74ca5): pooled persistent covers, held until local unlock (fail closed), lock screen before quitting while covering | PrivacyShieldPolicyTests 9/9 | **Security-unverified**: no physical-display observation yet (needs owner OK + disposable desktop); app crash/kill still uncovers (needs an independent cover process) |
-| Install the two shortcuts | Files built (is.workflow.actions.stagemanager.set, operation set, state off/on), signed with `shortcuts sign --mode anyone`, opened in Shortcuts 16:46 | Signed (AEA1) | Waiting for the owner's Add Shortcut clicks; then `shortcuts list` check; contents verified only by the owner's import preview (no supported read API) |
-| One-click setup in Mac Settings | Done (673445b): Set Up Automatically, only missing ones, polls → Ready, copies flagged, Open in Shortcuts | StageManagerSwitchTests 7/7 | Not clicked through in the app yet (shortcuts pending) |
-| Receivers: Add to Current Stage / Turn Off / Setup Required | Done (103ed8b) on iPhone/iPad/Android; Mac uses WindowManager's AXAddToStage on the strip item whose AXWindowsIDs holds the window | StageStripAccessTests; AX read-only inspection shows AXAddToStage + AXWindowsIDs | Physical run on disposable strip windows needs owner OK |
-| Lock Mac from phones | Done (ff74ca5): PROTOCOL 6.16, control required, real lock state | Unit tests (Mac, Kotlin); builds | Not run (it locks the owner's Mac) |
-| Clean up old ids | Done for Mac Known Devices + iOS Paired Macs (0fc5b2d) | KnownDeviceCleanupTests 2/2 | Android: no pairing dates stored → follow-up |
-| Full Desktop default Mirror | Done (ff74ca5): Mac fresh default + Android View Full Screen | Builds | Live check |
-| Tab menu clipped | Fixed (b604745): measured, placed in safe area, scrolls; inline Request Control | iOS build | Device screenshot |
-| Per-tab Rotate | Code path checked end to end (request rotation → Mac TileContentTransform) | — | Needs a live repro on the phone (blocked by Local Network) |
-| Waiting/Reconnecting | Spinner + Reduce Motion on iOS/Android; startupStep timings on the Mac (dc36bd2) | Builds | Receiver first-displayed-frame timing not added yet |
-| Stale "Choose a window" | Fixed (3a5b3c7) iOS + Android | Builds | Device check |
-| Per-app menu bar following tabs | Not started | — | — |
+| P0 iPhone 无法连接 | 已找到根因：macOS 本地网络隐私阻止 Dev App 的外拨（nehelper 按二进制 UUID 重新缓存；LaunchServices 副本过期）。修复：唯一 UUID（ebb37cf）、从 ~/Applications 运行、单一 LS 注册（交换脚本）、产品检测 + 设备提示（dc36bd2） | 于 15:57–16:08 连接并推流（AWDL，约 13 ms；窗口模式采集 2.0 秒，准入后首帧 2.4 秒） | 自 16:16 起每个新构建都会再次受阻：所有者需在系统设置 ▸ 本地网络中关闭/开启 MeowDisplay Dev。之后需重新检查镜像/扩展实时运行 + 重连 |
+| P0 隐私护盾闪烁 | 已从 Mac 日志证实原因：会话集合清空时遮盖窗口被销毁，下一次欢迎时最多 3 秒后才重建；重连时暴露 0.1–13 秒。已修复（ff74ca5）：池化的持久遮盖窗口，保持到本地解锁（失败关闭），遮盖期间退出前先锁定屏幕 | PrivacyShieldPolicyTests 9/9 | **未做安全验证**：尚未进行物理显示器观察（需要所有者确认 + 可弃置桌面）；App 崩溃/被杀仍会暴露（需要独立的遮盖进程） |
+| 安装两个快捷指令 | 文件已构建（is.workflow.actions.stagemanager.set、operation set、state off/on），用 `shortcuts sign --mode anyone` 签名，16:46 在“快捷指令”中打开 | 已签名（AEA1） | 等待所有者点按“添加快捷指令”；然后检查 `shortcuts list`；内容只能由所有者的导入预览验证（没有受支持的读取 API） |
+| Mac 设置中的一键设置 | 已完成（673445b）：自动设置、仅设置缺失项、轮询 → 就绪、复制已标记项、在“快捷指令”中打开 | StageManagerSwitchTests 7/7 | 尚未在 App 中逐项点按验证（快捷指令待处理） |
+| 接收端：添加到当前舞台 / 关闭 / 需要设置 | 已在 iPhone/iPad/Android 上完成（103ed8b）；Mac 对 AXWindowsIDs 包含该窗口的侧边条项使用 WindowManager 的 AXAddToStage | StageStripAccessTests；AX 只读检查显示 AXAddToStage + AXWindowsIDs | 在可弃置侧边条窗口上的物理运行需要所有者确认 |
+| 从手机锁定 Mac | 已完成（ff74ca5）：PROTOCOL 6.16，需要控制权，真实锁定状态 | 单元测试（Mac、Kotlin）；构建 | 未运行（会锁定所有者的 Mac） |
+| 清理旧 ID | 已完成 Mac 已知设备 + iOS 已配对 Mac（0fc5b2d） | KnownDeviceCleanupTests 2/2 | Android：未存储配对日期 → 后续处理 |
+| 完整桌面默认镜像 | 已完成（ff74ca5）：Mac 全新默认 + Android 查看全屏 | 构建 | 实时检查 |
+| 标签页菜单被裁切 | 已修复（b604745）：测量、放置在安全区、可滚动；内联“请求控制” | iOS 构建 | 设备截图 |
+| 每标签页旋转 | 代码路径已端到端检查（请求旋转 → Mac TileContentTransform） | — | 需要在手机上实时复现（被本地网络阻止） |
+| 等待/重连 | iOS/Android 上的加载指示器 + 减弱动态效果；Mac 上的 startupStep 计时（dc36bd2） | 构建 | 尚未加入接收端首帧显示计时 |
+| 过期的“选择窗口” | 已修复（3a5b3c7）iOS + Android | 构建 | 设备检查 |
+| 每 App 菜单栏跟随标签页 | 未开始 | — | — |
 
-### Physical checks 17:12–17:40 (owner OK'd; evidence/privacy-shield-2026-10-30/)
-- Connection: after the owner's Local Network toggle the iPhone (2000036) connected 17:14:42 (QUIC); Window capture 5.0 s after admission (the 3.2 s gap was the process's first video encoder: 17:14:42.848 → 45.885; see below).
-- Privacy Shield, **window-layer coverage check** (not physical-display verification): a WindowServer on-screen window trace (~105 Hz) with a disposable magenta test pattern under the cover found the cover window listed above the pattern with 0 gaps in 100 s across 3 iPhone app relaunches and a disconnect; cover held after the disconnect ("staying covered until unlocked"). Positive control: the trace reported the cover gone right after the owner's password unlock (17:35:07). Only macOS's own lock screen and password prompt were listed above it. What this proves: the window server kept the cover window ordered above everything else at every sample. What it does not prove: what the panel actually showed (a compositor frame between samples, a display reconfiguration, an external display or mirroring path). **Independent physical-display verification is still open**: eyes or a camera on the panel, or a capture device on an external display's cable, during the same transitions. An app crash still uncovers (see DESIGN-2026-10-30-crash-safe-shield.md).
-- Shortcuts: both installed (`shortcuts list`); contents not readable without opening the editor.
-- Lock Mac: Control-Command-Q post locked the Mac in 0.43 s, read back from the session's lock state.
-- Add to Current Stage: NOT working. AXAddToStage on the strip item returned success 4 times (shield up and down, test pattern up and down; 'MeowDisplay RC Test', 'All Shortcuts') but the window never left the strip. The app reports 'failed' honestly. Needs another supported way, or drop the button.
+### 物理检查 17:12–17:40（所有者已确认；evidence/privacy-shield-2026-10-30/）
+- 连接：所有者切换本地网络后，iPhone（2000036）于 17:14:42 连接（QUIC）；窗口采集在准入后 5.0 秒完成（其中 3.2 秒的间隔是进程首次视频编码：17:14:42.848 → 45.885；见下文）。
+- 隐私护盾，**窗口层遮盖检查**（不是物理显示器验证）：用 WindowServer 屏幕窗口跟踪（约 105 Hz），并在遮盖层下放置可弃置的洋红色测试图案，在 100 秒内跨 3 次 iPhone App 重启和一次断开，发现遮盖窗口始终列在图案之上，0 个间隙；断开后遮盖保持（“保持遮盖直到解锁”）。阳性对照：所有者用密码解锁后（17:35:07），跟踪立即报告遮盖消失。列在其上方的只有 macOS 自身的锁屏和密码提示。这证明了什么：每次采样时窗口服务器都把遮盖窗口排在其他所有内容之上。它没有证明什么：面板实际显示的内容（采样之间的合成帧、显示器重配置、外接显示器或镜像路径）。**独立的物理显示器验证仍未完成**：在相同切换过程中，用肉眼或摄像头观察面板，或在外接显示器线缆上接采集设备。App 崩溃仍会暴露（见 DESIGN-2026-10-30-crash-safe-shield.md）。
+- 快捷指令：两个都已安装（`shortcuts list`）；不打开编辑器无法读取内容。
+- 锁定 Mac：发送 Control-Command-Q 后 Mac 在 0.43 秒内锁定，从会话的锁定状态回读确认。
+- 添加到当前舞台：无效。对侧边条项调用 AXAddToStage 四次返回成功（护盾开/关、测试图案开/关；'MeowDisplay RC Test'、'All Shortcuts'），但窗口从未离开侧边条。App 会如实报告“失败”。需要另一种受支持的方式，或去掉该按钮。
 
-### After 17:40 (local commits 41a3cbe … 28405df, not pushed)
+### 17:40 之后（本地提交 41a3cbe … 28405df，未推送）
 
-Installed: iPhone and iPad iOS 2000040 (28405df). Mac Dev app still 103ed8b (new Mac code not swapped in: each new build can trip Local Network privacy again). Moto not attached.
-Regression: Mac unit tests 2402, 3 failing, all in WorkspaceZoomTests (pan stops at source edges / underzoom centring). These predate today: they contradict the intended free-canvas panning of a88a3b5, and no commit today touches that code. Android core + app unit tests 976/976.
+已安装：iPhone 与 iPad iOS 2000040（28405df）。Mac Dev App 仍为 103ed8b（新 Mac 代码未换入：每个新构建都可能再次触发本地网络隐私）。Moto 未连接。
+回归：Mac 单元测试 2402 项，3 项失败，全部在 WorkspaceZoomTests（平移停在源边缘 / 缩放不足时的居中）。这些问题早于今天：它们与 a88a3b5 预期的自由画布平移相矛盾，且今天没有提交触碰该代码。Android core + app 单元测试 976/976。
 
-| Item | Done | Verified | Not verified |
+| 项目 | 已完成 | 已验证 | 未验证 |
 |---|---|---|---|
-| Add to Current Stage | Hidden in production (41a3cbe): the Mac reports `stageAddAvailable` only when `StageStripAccess.isAvailable`; research kept in RESEARCH-2026-10-30-add-to-stage.md | Builds; receivers hide the button without the flag | A further AXPress experiment needs the owner's OK and disposable windows |
-| Show on Mac + Turn Off Stage Manager | Restored next to each other (41a3cbe) | Builds | Device check |
-| Per-app menu bar follows the tab | The pane's expected app goes with each menu request; a top-level reply naming another app (the previous tab's) is asked again after 0.4 s, at most 3 times (a6d4523, 32d71a1 iOS/Mac; 5116572 Android) | AppMenuTests 2/2; AppMenuModelTest 3/3 | Tab switch watched on a device |
-| Pane menu fits | Natural height, scrolls only when taller than the room (a6d4523) | iPhone screenshot (evidence/rotate/) | — |
-| Per-tab Rotate | Reproduced and working on the iPhone: `testRotatesAPaneOnTheLiveMac` rotated the Full Desktop pane 90° and Reset View restored it | Live UI test on the iPhone (evidence/rotate/) | Android device (Moto not attached) |
-| Window-mode startup pause | Cause: the first VideoToolbox encoder in a process costs 0.65–1.05 s standalone (3.0 s during the first start); later ones 0–4 ms, and one HEVC session warms H.264. Fix: a 64×64 encoder made and dropped 2 s after launch (fd0212d). Also fixed: a Full Desktop pane was restarted as "stalled" before its stream existed (start time read as 0), costing it ≥1 s every start | WindowCaptureHealthTests 8/8; standalone timing script | Timed on the next Dev-app swap. Remaining per-start cost: the audio carrier stream's `startCapture` 0.8–2.1 s, which panes don't wait for |
-| Android old Mac entries | Pins now record when they were paired (same atomic write); Clean Up in the Macs card lists exactly what goes, with dates. No platform guesses among undated pairings: undated ones are older than any dated one; with no dates nothing is offered (8cbab2f, also Shared/KnownDeviceCleanup) | PairedMacCleanupTest 3/3; KnownDeviceCleanupTests 3/3 | On the Moto. Existing Android pins are undated, so Clean Up appears only after a Mac is paired again |
-| OLED care for the Privacy Shield | The cover stays black; its message and Unlock button move to a different ninth of the screen every minute, dim after 1 min without local input, go dark after 5; local mouse or keys bring them back at once. On every display (macOS doesn't say which panels are OLED) (ad9be49) | PrivacyShieldPolicyTests 11/11; Mac app builds | On screen: needs a Dev-app swap and the shield turned on (owner OK) |
-| Crash-safe shield | Design only: DESIGN-2026-10-30-crash-safe-shield.md | — | Not built; no privileged helper |
+| 添加到当前舞台 | 生产环境中隐藏（41a3cbe）：仅当 `StageStripAccess.isAvailable` 时 Mac 才报告 `stageAddAvailable`；研究保留在 RESEARCH-2026-10-30-add-to-stage.md | 构建通过；接收端在没有该标志时隐藏按钮 | 进一步的 AXPress 实验需要所有者确认和可弃置窗口 |
+| 在 Mac 上显示 + 关闭台前调度 | 已恢复并相邻显示（41a3cbe） | 构建 | 设备检查 |
+| 每 App 菜单栏跟随标签页 | 每个菜单请求都带上窗格预期的 App；若顶层回复命名了另一个 App（上一个标签页的），则在 0.4 秒后重问，最多 3 次（a6d4523、32d71a1 iOS/Mac；5116572 Android） | AppMenuTests 2/2；AppMenuModelTest 3/3 | 在设备上观察标签页切换 |
+| 窗格菜单适配 | 自然高度，仅当高于可用空间时才滚动（a6d4523） | iPhone 截图（evidence/rotate/） | — |
+| 每标签页旋转 | 已在 iPhone 上复现并可用：`testRotatesAPaneOnTheLiveMac` 将完整桌面窗格旋转 90°，重置视图可恢复 | iPhone 上的实时 UI 测试（evidence/rotate/） | Android 设备（Moto 未连接） |
+| 窗口模式启动停顿 | 原因：进程中的首个 VideoToolbox 编码器单独耗时 0.65–1.05 秒（首次启动时 3.0 秒）；后续编码器 0–4 ms，一个 HEVC 会话可为 H.264 预热。修复：启动 2 秒后创建并释放一个 64×64 编码器（fd0212d）。同时修复：完整桌面窗格在流尚不存在时（启动时间读为 0）被当作“停滞”重启，导致每次启动多花 ≥1 秒 | WindowCaptureHealthTests 8/8；独立计时脚本 | 在下次换入 Dev App 时计时。每次启动的剩余开销：音频载波流的 `startCapture` 0.8–2.1 秒，窗格不会等它 |
+| Android 旧 Mac 条目 | 现在固定的记录会保存配对时间（同一次原子写入）；Mac 卡片中的“清理”会准确列出将删除的条目及日期。无日期的配对之间不做平台猜测：无日期条目比任何有日期条目都旧；完全没有日期时不提供清理（8cbab2f，另见 Shared/KnownDeviceCleanup） | PairedMacCleanupTest 3/3；KnownDeviceCleanupTests 3/3 | 在 Moto 上。现有 Android 固定记录无日期，因此只有再次配对某台 Mac 后才会出现“清理” |
+| 隐私护盾的 OLED 保护 | 遮盖层保持黑色；其消息和“解锁”按钮每分钟移动到屏幕另一个九分之一区域，本地无输入 1 分钟后变暗，5 分钟后熄灭；本地鼠标或按键会立即恢复。适用于每个显示器（macOS 不会说明哪些面板是 OLED）（ad9be49） | PrivacyShieldPolicyTests 11/11；Mac App 构建 | 在屏幕上：需要换入 Dev App 并开启护盾（所有者已确认） |
+| 崩溃安全护盾 | 仅设计：DESIGN-2026-10-30-crash-safe-shield.md | — | 未构建；没有特权助手 |
 
-### After 18:30 (local commits 0ea6bc7 … b8b84fd, not pushed)
+### 18:30 之后（本地提交 0ea6bc7 … b8b84fd，未推送）
 
-Installed: Mac Dev app = b8b84fd (19:40, ~/Applications; new binary UUID, so Local Network may need the owner's toggle again). iPhone = iOS 2000045 (da6b6ed); iPad = 2000044 (a8d12da; the 2000045 install was refused, iPad probably locked). Moto not attached.
-Regression (19:40, b8b84fd): Mac unit tests 2414, 2 skipped, 5 failures, none in the new code: 4 were tests still expecting the old defaults (Natural touch, phones in Direct Touch) and 1 was real: the new iOS screen-awake timer used `systemUptime`, a required-reason API the privacy manifest doesn't declare (PrivacyManifestTests caught it). Both fixed in a8d12da (CACurrentMediaTime, as the rest of the iOS code); the five pass. Android core + app 983/983.
+已安装：Mac Dev App = b8b84fd（19:40，~/Applications；新的二进制 UUID，因此本地网络可能需要所有者再次切换）。iPhone = iOS 2000045（da6b6ed）；iPad = 2000044（a8d12da；2000045 的安装被拒绝，iPad 可能已锁定）。Moto 未连接。
+回归（19:40，b8b84fd）：Mac 单元测试 2414 项，2 跳过，5 失败，均不在新代码中：4 项是仍在期待旧默认值的测试（自然触控、手机使用直接触控），1 项是真实问题：新的 iOS 屏幕常亮计时器使用了 `systemUptime`，这是隐私清单未声明的 required-reason API（PrivacyManifestTests 捕获）。两者均已在 a8d12da 中修复（改用 CACurrentMediaTime，与其余 iOS 代码一致）；这五项通过。Android core + app 983/983。
 
-| Item | Done | Verified | Not verified |
+| 项目 | 已完成 | 已验证 | 未验证 |
 |---|---|---|---|
-| Privacy Shield crash | Two crashes at cover show (18:38:42, 18:39:03): the notice panel's SwiftUI host sized its own window, its height flipped 33/34 pt and AppKit threw after too many constraint passes. All shield windows now have fixed sizes; covers are plain AppKit with a placed message (a97e13b) | No crash in the supervised run 2; PrivacyShieldPolicyTests | Crash reports kept in evidence/privacy-shield-oled-2026-10-30/ |
-| OLED care, supervised run 2 (18:52:09–18:58:11) | — | Cover on both displays; a scripted (non-physical) click on Unlock ignored; dim at +60.0 s; message moved every minute (spots 1–5); non-physical pointer moves at +90/+200/+330 s changed nothing; disconnect held the cover; reconnect in Mirror then Window kept it; dark at +300 s; bright at the owner's touch; unlocked with the password | 13,577 samples, one "gap" from 18:58:04.77 when the built-in display went off (clamshell closed at 18:58:04.136): the tracer used stale display rectangles, so the tracer couldn't check the BenQ during that re-arrangement. Owner (19:50): they closed the lid, and the BenQ "showed whatever the Mac showed". The tracer should re-read displays every sample |
-| iOS screen awake | Matches Android: awake only while the Mac's picture is watched in the foreground (Mirror, Extend, Window), 30 s grace on reconnect; auto-lock back on Settings, home, background, failed connection. Settings ▸ General ▸ Keep Screen Awake While Streaming (185fa54) | ScreenAwakePolicyTests | Watched on a device |
-| Zoom tests | Updated to the free-canvas spec (0ea6bc7); implementation unchanged | WorkspaceZoomTests pass | — |
-| Input defaults | Direct Touch style Classic; phones start in Trackpad, iPads and tablets in Direct Touch; schema 21 applies it once to existing installs (e9bbfb0) | InputDefaultsTests, ControlPreferencesJsonTest | On devices |
-| Trackpad cursor per pane | In Trackpad mode the cursor lives in the focused pane: always drawn there (the Mac sends the workspace pointer, not wherever its own cursor is), never slides into a neighbour, starts in the pane's middle the first time and comes back where it was per pane and per tab; kept on the same spot of the window through zoom, pan, turn and resize. Another pane gets it by being focused (its label, a touch) (d846d63) | WindowWorkspaceTargetingTests 27/27; live on the iPhone (19:52–19:56, evidence/twist-cursor-2026-10-30/): cursor drawn at the focused Full Desktop pane's middle; a touch on the Chrome pane focused it and the cursor jumped to that pane's middle; the twist focused Full Desktop again and its cursor was back, turned with the pane | Moving it by finger: this session had no control (Request Control showing), so relative motion wasn't applied. iPad, Moto |
-| Free pane rotation | Two fingers turn a pane to any whole degree; the window point under the fingers stays under them; the size follows the spread only; an 8° twist starts it (a pinch's wobble never turns); with Snap Rotation a magnet at right angles (±5°); instant turned preview; the menu's Rotate steps to the next right angle. Wire and saved layouts stay whole numbers (c8923d1 Mac + iOS, b8b84fd Android) | WorkspaceFreeRotationTests 6/6 (Mac), WorkspaceFreeRotationTest 6/6 (Android); Android 983/983; live on the iPhone: a synthesized 50° two-finger twist turned the Full Desktop pane about 42° (8° start threshold), composed sharp by the Mac; Reset View put it back (testTwistTurnsAPaneAndTheTrackpadCursorShowsOnTheLiveMac) | A real hand on the glass (feel, magnet); iPad; Moto |
+| 隐私护盾崩溃 | 显示遮盖层时发生两次崩溃（18:38:42、18:39:03）：通知面板的 SwiftUI 宿主自行调整窗口大小，其高度在 33/34 pt 之间翻转，经过过多约束计算后 AppKit 抛出异常。现在所有护盾窗口都有固定尺寸；遮盖层是纯 AppKit 并放置消息（a97e13b） | 受监督运行 2 中无崩溃；PrivacyShieldPolicyTests | 崩溃报告保存在 evidence/privacy-shield-oled-2026-10-30/ |
+| OLED 保护，受监督运行 2（18:52:09–18:58:11） | — | 两个显示器上均有遮盖；对“解锁”的脚本化（非物理）点击被忽略；+60.0 秒时变暗；消息每分钟移动（位置 1–5）；+90/+200/+330 秒的非物理指针移动没有产生任何变化；断开连接时遮盖保持；重新以镜像连接、再切到窗口模式时遮盖保持；+300 秒时熄灭；所有者触摸时变亮；用密码解锁 | 13,577 个样本，18:58:04.77 出现一个“间隙”，当时内置显示器关闭（18:58:04.136 合上盖子）：跟踪器使用了过期的显示器矩形，因此在那次重排期间无法检查 BenQ。所有者（19:50）：他们合上了盖子，BenQ“显示 Mac 显示的内容”。跟踪器应在每个样本重新读取显示器信息 |
+| iOS 屏幕常亮 | 与 Android 一致：仅在前台观看 Mac 画面时保持常亮（镜像、扩展、窗口），重连时有 30 秒宽限；进入设置、主页、后台、连接失败时恢复自动锁定。设置 ▸ 通用 ▸ 推流时保持屏幕常亮（185fa54） | ScreenAwakePolicyTests | 在设备上观察 |
+| 缩放测试 | 已更新为自由画布规格（0ea6bc7）；实现未变 | WorkspaceZoomTests 通过 | — |
+| 输入默认值 | 直接触控样式为 Classic；手机默认触控板，iPad 和平板默认直接触控；schema 21 对现有安装应用一次（e9bbfb0） | InputDefaultsTests、ControlPreferencesJsonTest | 在设备上 |
+| 每窗格触控板光标 | 在触控板模式下，光标位于聚焦窗格：始终绘制在该窗格（Mac 发送工作区指针，而不是其自身光标所在位置），绝不会滑入相邻窗格，首次从窗格中心开始，之后按窗格和标签页回到原位置；在缩放、平移、旋转和调整大小过程中保持位于窗口的同一点。另一个窗格通过获得焦点（其标签、触摸）来获取光标（d846d63） | WindowWorkspaceTargetingTests 27/27；在 iPhone 上实时验证（19:52–19:56，evidence/twist-cursor-2026-10-30/）：光标绘制在聚焦的完整桌面窗格中心；触摸 Chrome 窗格使其聚焦，光标跳到该窗格中心；旋转手势再次聚焦完整桌面，其光标回到原位并随窗格旋转 | 用手指移动：本次会话没有控制权（显示“请求控制”），因此未应用相对移动。iPad、Moto |
+| 自由窗格旋转 | 两指可将窗格旋转到任意整数度；手指下的窗口点在旋转时保持在其下方；尺寸只随两指间距变化；8° 的扭转才会启动（捏合的手抖绝不会触发旋转）；开启吸附旋转时在直角处有磁吸（±5°）；即时旋转预览；菜单中的“旋转”跳到下一个直角。传输格式和保存的布局保持整数（c8923d1 Mac + iOS，b8b84fd Android） | WorkspaceFreeRotationTests 6/6（Mac）、WorkspaceFreeRotationTest 6/6（Android）；Android 983/983；在 iPhone 上实时验证：合成的 50° 两指扭转将完整桌面窗格旋转约 42°（8° 启动阈值），Mac 合成清晰；“重置视图”可恢复（testTwistTurnsAPaneAndTheTrackpadCursorShowsOnTheLiveMac） | 真人手指在玻璃上（手感、磁吸）；iPad；Moto |
 
-### After the owner's 20:05 feedback (local commits 86092d3 … 03f1a38, not pushed)
+### 所有者 20:05 反馈之后（本地提交 86092d3 … 03f1a38，未推送）
 
-Installed 20:17: Mac Dev app = 03f1a38 (pid 64109). iPhone and iPad = iOS 2000046 (03f1a38). Moto not attached.
-Later: iPad = iOS 2000047 (990375b, accessibility). iPhone unavailable at install time, still 2000046.
+20:17 安装：Mac Dev App = 03f1a38（pid 64109）。iPhone 与 iPad = iOS 2000046（03f1a38）。Moto 未连接。
+稍后：iPad = iOS 2000047（990375b，辅助功能）。安装时 iPhone 不可用，仍为 2000046。
 
-| Item | Done | Verified | Not verified |
+| 项目 | 已完成 | 已验证 | 未验证 |
 |---|---|---|---|
-| Panes "Reconnecting… (try 5)", "The Mac stopped sending … Tap Retry" | Cause from the Mac log: the Mac held its keep-display-awake assertion for only 60 s after a session started. On an idle Mac (here covered by the shield) the display slept at about 19:59, the window server stopped, and every capture (Chrome, Zed, then Full Desktop) delivered zero frames, retried and gave up. They came back at 20:01:00, when the owner touched the Mac. Fix: a display-sleep assertion held while a device watches (admitted, video on, not paused), released on pause, drop and teardown (c9af421). "Closed on Mac" on the Desktop pane was the built-in display going off with the lid | StreamingDisplayAwakeTests 2/2 | A long idle session on the devices |
-| Preview skewed while turning or panning | Cause: the instant preview moved the snapshot of the pane's whole box; for a pane already at an odd angle, the box's empty corners (dark) were dragged over the backdrop, giving slanted dark shapes. The snapshot is now masked to the window's own four corners (CAShapeLayer on iOS, clipPath on Android) (86092d3) | WorkspaceFreeRotationTests (outline corners) | On the devices |
-| Stage Manager in Settings | The Mac always reports Stage Manager on/off in Window mode; Settings ▸ Input shows it with Turn Off (confirmed; MeowDisplay turns it back on when Window mode ends) or Turn On (a device's Turn On clears that restore), control only; "setup" explains the Mac's one-time setup (03f1a38). Android the same | Mac tests, Android WorkspaceWireTest; iOS builds | On the devices |
-| Trackpad in panes | Owner: works | Owner, 20:05 | — |
-| Accessibility everywhere | iOS (990375b): Mac screen is one direct-touch element; announcements for connect, reconnect/lost, Request Control and Files; Voice Control names; adjustable pane divider; timed prompts stay under VoiceOver; Reduce Motion fades; headings. Android (45db122): TalkBack labels, roles, states, headings, announcements, 48 dp targets, wrapping text. Store guidance: STORE-ACCESSIBILITY-2026-10-30.md | Full Mac suite 2416/0 failures; iOS builds; Android 984/984 | VoiceOver, Voice Control and TalkBack on a device (owner's checklist in the doc) |
+| 窗格显示“正在重连…（第 5 次）”、“Mac 已停止发送…点按重试” | 从 Mac 日志得出的原因：会话开始后，Mac 只保持“显示器常亮”断言 60 秒。在空闲 Mac 上（此处被护盾遮盖），显示器约 19:59 休眠，窗口服务器停止，每次采集（Chrome、Zed，然后是完整桌面）都获得零帧、重试后放弃。所有者在 20:01:00 触摸 Mac 后它们恢复。修复：有设备观看时保持显示器休眠断言（已准入、视频开启、未暂停），在暂停、断开和拆除时释放（c9af421）。桌面窗格上的“已在 Mac 上关闭”是内置显示器随盖子关闭而熄灭 | StreamingDisplayAwakeTests 2/2 | 在设备上进行长时间空闲会话 |
+| 旋转或平移时预览倾斜 | 原因：即时预览移动的是整个窗格边界框的快照；对于已经处于非直角角度的窗格，边界框的空角（深色）被拖到背景上，形成倾斜的深色形状。现在快照会遮罩到窗口自身的四个角（iOS 用 CAShapeLayer，Android 用 clipPath）（86092d3） | WorkspaceFreeRotationTests（轮廓角） | 在设备上 |
+| 设置中的台前调度 | 在窗口模式下，Mac 始终报告台前调度的开/关状态；设置 ▸ 输入会显示它，并提供“关闭”（需确认；窗口模式结束时 MeowDisplay 会重新开启）或“开启”（设备端的“开启”会取消该恢复），仅限控制；“设置”会说明 Mac 上的一次性配置（03f1a38）。Android 相同 | Mac 测试、Android WorkspaceWireTest；iOS 构建 | 在设备上 |
+| 窗格中的触控板 | 所有者：可用 | 所有者，20:05 | — |
+| 全方位辅助功能 | iOS（990375b）：Mac 画面是单个直接触控元素；为连接、重连/断开、请求控制和文件提供朗读；Voice Control 名称；可调整的窗格分隔条；定时提示在 VoiceOver 下保持显示；减弱动态效果使用淡入淡出；标题。Android（45db122）：TalkBack 标签、角色、状态、标题、朗读、48 dp 触控目标、文本换行。商店指引：STORE-ACCESSIBILITY-2026-10-30.md | 完整 Mac 套件 2416/0 失败；iOS 构建；Android 984/984 | 在设备上使用 VoiceOver、Voice Control 和 TalkBack（文档中有所有者的检查清单） |
 
-### Night of 2026-10-30 (owner's decisions after 21:00; commits 3c15edd … ef262ea, not pushed)
+### 2026-10-30 夜间（所有者 21:00 后的决定；提交 3c15edd … ef262ea，未推送）
 
-Installed: Mac Dev = 7f8a0f1 (+ later commits not yet swapped in: 009582f Touch ID, 6f7e313 log line).
-iPhone and iPad = iOS 2000048. Moto = debug 7f8a0f1. Levels: **Impl** = code in; **Auto** = automated
-tests; **Phys** = seen on real devices; **Release** = ready to ship.
+已安装：Mac Dev = 7f8a0f1（+ 尚未换入的后续提交：009582f Touch ID、6f7e313 日志行）。
+iPhone 与 iPad = iOS 2000048。Moto = debug 7f8a0f1。级别：**Impl** = 代码已合入；**Auto** = 自动化
+测试；**Phys** = 在真机上观察；**Release** = 可发布。
 
-| Item | Impl | Auto | Phys | Release |
+| 项目 | Impl | Auto | Phys | Release |
 |---|---|---|---|---|
-| Display awake while watching: one assertion counted across viewers; released with the last viewer, on sender stop, Screen Recording revoked, switched out (3c15edd) | yes | 6 tests incl. a real IOKit assertion | yes: iPhone and Moto together held 1 assertion (21:48–21:51); released at the last viewer every time (21:51:15, 21:59:35, 22:02:18, 22:05:04); also across in-session mode switches | no: battery, Screen Recording revocation and Fast User Switching not tried physically |
-| The 19:59 pane stalls | **cause corrected**: not display sleep (a `caffeinate -dis` held it off all along). Stalls followed Stage Manager turning off and a display topology change | — | reproduced in part: a strip window (Chrome) after Home/back goes paused, then "live again", then stalled (status 3) and retries (21:45:22–31) | no: the strip-window retry loop needs a fix |
-| Keeping the display powered is unavoidable for capture | evidence: displays slept 18:41:58.215 and SCK stopped 60 ms later (-3815). This Mac locks immediately on display sleep | — | log evidence | — |
-| VoiceOver/TalkBack can't click the Mac: picture takes no touches until Direct Touch; activating never clicks (7f8a0f1) | iOS + Android | 5 Mac + 4 Android policy tests | **no**: needs VoiceOver on a device (owner); the Moto has **no TalkBack** (LineageOS, no Google services) | no |
-| iOS accessibility audit (XCUITest) | test in ef262ea | ran on the iPhone: home 6 issues (Dynamic Type partial, Mac name clipped); live session 1 (Stage Manager notice clipped) | iPhone only (iPad was locked) | Larger Text / Contrast stay undeclared |
-| Long idle, Window mode (Full Desktop + Chrome in the strip) | — | live UI test | **yes**: 10 min with no input, 2 panes, no reconnect banners; Home and back resumed in 129–136 ms | — |
-| First frame | — | — | Mirror 0.14 s (Moto), 3.1 s after a mode switch (iPhone); Window first pane frame 62–78 ms warm, 1.5–2.1 s cold; **Extend 37 s (Moto) and 61 s (iPhone)**: about 9–20 s before SCK lists the new virtual display, then 27–41 s inside SCStream start, and other devices' capture starts wait behind it | **no: Extend start is a blocker** |
-| Mixed modes at once (physical, iPhone + Moto) | — | — | **yes**: A iPhone Mirror + Moto Extend; B iPhone Window + Moto Mirror; C iPhone Extend + Moto Mirror (Moto's plain Connect kept its last mode). In-session switches Window→Mirror (View Full Screen) and Window→Extend (overview) worked; no trouble banners | Extend latency above |
-| Per-pane rotation | earlier commits | earlier tests | the owner's saved tilt and zoom on Full Desktop persisted across sessions; the test's own rotate-and-reset was skipped (it won't touch an already-turned pane) | — |
-| Pane menu | — | live test | yes: 8 rows | — |
-| App menus | — | live test | not shown: the session had no control | — |
-| Stage Manager in Settings | 03f1a38 | — | the Turn Off request was **dropped by the Mac** (no control) while the device showed the button enabled. Stage Manager stayed On. Now logged (6f7e313) | no: the device must show it needs control |
-| Touch ID for the shield unlock (owner request, 009582f) | yes, setting on by default when the Mac has Touch ID | 2 policy tests; full suite 2427/0 | **no**: needs the owner at the Mac | no |
-| Crash-safe shield (isolated prototype, e3c0297) | prototype only | 9 policy tests; 5 window-layer scenarios (B: 0 gap; A: 315 ms floor) | no panel or camera check | **not installed; asks for approval** (design doc) |
-| Same-named Macs: short ID per Mac (owner request 22:05; d25e4f3) | iOS home and Paired Macs, Android home, This Mac's ID in Mac Settings ▸ System | Mac 2 + Android 2 tests, shared vector "1764" | not yet looked at on the devices | Android Paired Macs page and the Mac user's name (needs an authenticated protocol field) still to do |
+| 观看时显示器保持唤醒：跨观看者计为一个断言；在最后一个观看者离开、发送端停止、屏幕录制被撤销、切换出去时释放（3c15edd） | yes | 6 项测试，包括真实的 IOKit 断言 | yes：iPhone 和 Moto 一起保持 1 个断言（21:48–21:51）；每次都在最后一个观看者处释放（21:51:15、21:59:35、22:02:18、22:05:04）；会话内模式切换时也是 | no：电池供电、屏幕录制撤销和快速用户切换未做物理测试 |
+| 19:59 的窗格停滞 | **原因已更正**：不是显示器休眠（`caffeinate -dis` 一直阻止了它）。停滞发生在台前调度关闭和显示器拓扑变化之后 | — | 部分复现：侧边条窗口（Chrome）在主页/返回后进入暂停，然后“恢复实时”，接着停滞（状态 3）并重试（21:45:22–31） | no：侧边条窗口的重试循环需要修复 |
+| 采集无法避免地需要显示器供电 | 证据：显示器于 18:41:58.215 休眠，SCK 在 60 ms 后停止（-3815）。这台 Mac 在显示器休眠时立即锁定 | — | 日志证据 | — |
+| VoiceOver/TalkBack 无法点击 Mac：在直接触控前画面不接受触摸；激活操作绝不会点击（7f8a0f1） | iOS + Android | 5 项 Mac + 4 项 Android 策略测试 | **no**：需要在设备上使用 VoiceOver（所有者）；Moto **没有 TalkBack**（LineageOS，无 Google 服务） | no |
+| iOS 辅助功能审计（XCUITest） | 测试在 ef262ea 中 | 在 iPhone 上运行：主页 6 个问题（动态字体部分支持、Mac 名称被裁切）；实时会话 1 个（台前调度通知被裁切） | 仅 iPhone（iPad 已锁定） | 更大字体 / 对比度仍未声明 |
+| 长时间空闲，窗口模式（完整桌面 + 侧边条中的 Chrome） | — | 实时 UI 测试 | **yes**：10 分钟无输入，2 个窗格，无重连横幅；主页返回在 129–136 ms 内恢复 | — |
+| 首帧 | — | — | 镜像 0.14 秒（Moto），模式切换后 3.1 秒（iPhone）；窗口首个窗格帧热启动 62–78 ms，冷启动 1.5–2.1 秒；**扩展 37 秒（Moto）和 61 秒（iPhone）**：SCK 列出新虚拟显示器前约 9–20 秒，随后 SCStream 启动内 27–41 秒，其他设备的采集启动都在其后面等待 | **no：扩展启动是阻塞项** |
+| 同时混合模式（物理，iPhone + Moto） | — | — | **yes**：A iPhone 镜像 + Moto 扩展；B iPhone 窗口 + Moto 镜像；C iPhone 扩展 + Moto 镜像（Moto 的普通“连接”保持上次模式）。会话内切换 窗口→镜像（查看全屏）和 窗口→扩展（总览）均可用；无故障横幅 | 扩展延迟见上 |
+| 每窗格旋转 | 较早的提交 | 较早的测试 | 所有者在完整桌面上保存的倾斜和缩放在跨会话后保持；测试自身的旋转并重置被跳过（不会触碰已经旋转的窗格） | — |
+| 窗格菜单 | — | 实时测试 | yes：8 行 | — |
+| App 菜单 | — | 实时测试 | 未显示：会话没有控制权 | — |
+| 设置中的台前调度 | 03f1a38 | — | “关闭”请求被 Mac **丢弃**（无控制权），而设备仍显示按钮可用。台前调度保持开启。现已记录日志（6f7e313） | no：设备必须显示需要控制权 |
+| 护盾解锁使用 Touch ID（所有者要求，009582f） | yes，Mac 有 Touch ID 时该设置默认开启 | 2 项策略测试；完整套件 2427/0 | **no**：需要所有者在 Mac 前 | no |
+| 崩溃安全护盾（隔离原型，e3c0297） | 仅原型 | 9 项策略测试；5 个窗口层场景（B：0 间隙；A：315 ms 下限） | 无面板或摄像头检查 | **未安装；请求批准**（设计文档） |
+| 同名 Mac：每台 Mac 的短 ID（所有者要求 22:05；d25e4f3） | iOS 主页和已配对 Mac、Android 主页、Mac 设置 ▸ 系统中的“此 Mac 的 ID” | Mac 2 + Android 2 项测试，共享向量 "1764" | 尚未在设备上查看 | Android 已配对 Mac 页面和 Mac 用户名（需要经过认证的协议字段）仍待完成 |
 
-Installed at 22:2x: Mac Dev = d25e4f3 (pid 32262); iPhone = iOS 2000049 (d25e4f3); iPad still 2000048
-(install refused, locked); Moto = debug d25e4f3. Mixed-mode evidence: `evidence/mixed-modes-2026-10-30/`
-(timeline.txt, xcresults, Moto screenshots); helpers `tools/moto-mode-session.sh` and `tools/mac-session-summary.sh`.
+22:2x 安装：Mac Dev = d25e4f3（pid 32262）；iPhone = iOS 2000049（d25e4f3）；iPad 仍为 2000048
+（安装被拒绝，已锁定）；Moto = debug d25e4f3。混合模式证据：`evidence/mixed-modes-2026-10-30/`
+（timeline.txt、xcresults、Moto 截图）；辅助脚本 `tools/moto-mode-session.sh` 和 `tools/mac-session-summary.sh`。
 
-## Late night 2026-10-30 (after the 22:30 brief)
+## 2026-10-30 深夜（22:30 简报之后）
 
-| Item | Implemented | Automated tests | Physically verified | Release-ready |
+| 项目 | 已实现 | 自动化测试 | 物理验证 | 可发布 |
 |---|---|---|---|---|
-| Extend start: shared ScreenCaptureKit request broker (e268f46, ed34d39, 0ea6ebf) + start traces | yes | 11 CoalescingFetchTests; Mac suite 2445/0 | yes: Moto cold 2.4 s / warm 0.7 s, iPhone 1.2 s (no AltTab); 19–21 s with AltTab 10.8 (cause: alt-tab-macos#5861) | after a soak |
-| AltTab removed at the owner's request (app, prefs, caches, launch agent, its TCC entries) | done | n/a | dialogs gone (owner cleared; none on screen) | n/a |
-| Stage Manager on/off in View Only asks for control in place (iOS Settings + pane, Android Settings) (c39f839) | yes | WorkspaceClientTests gate test | Android Settings in View Only shows Request Control + reason (screenshot); iOS installed 2000050, not yet looked at | after iOS check |
-| Strip window pause: one fresh stream per window change, then honest Paused (40222cd) | yes | WindowCaptureHealthTests | not yet (needs the strip case live) | no |
-| Paired-only Mac user name + Mac toggle (73580dc, ec6c4f7 bidi-safe) | yes | Mac 3 + Android 3 tests | Moto stored "<owner name>" from the authenticated welcome | after iOS look |
-| caffeinate -dis | investigated (read-only) | n/a | started by hand in a Zed terminal tab (ttys005) Oct 28 22:49, runs forever; not MeowDisplay; left running | n/a |
+| 扩展启动：共享 ScreenCaptureKit 请求代理（e268f46、ed34d39、0ea6ebf）+ 启动跟踪 | yes | 11 项 CoalescingFetchTests；Mac 套件 2445/0 | yes：Moto 冷启动 2.4 秒 / 热启动 0.7 秒，iPhone 1.2 秒（无 AltTab）；有 AltTab 10.8 时 19–21 秒（原因：alt-tab-macos#5861） | 经过浸泡测试后 |
+| 应所有者要求移除 AltTab（App、偏好设置、缓存、启动代理、其 TCC 条目） | done | n/a | 对话框已消失（所有者已清理；屏幕上没有） | n/a |
+| 仅查看模式下开关台前调度会就地请求控制权（iOS 设置 + 窗格，Android 设置）（c39f839） | yes | WorkspaceClientTests 门控测试 | Android 仅查看模式的设置会显示“请求控制”+ 原因（截图）；iOS 已安装 2000050，尚未查看 | iOS 检查后 |
+| 侧边条窗口暂停：每次窗口变化使用一条新流，然后如实显示“暂停”（40222cd） | yes | WindowCaptureHealthTests | 尚未（需要实时侧边条场景） | no |
+| 仅已配对设备可见的 Mac 用户名 + Mac 开关（73580dc、ec6c4f7 双向文本安全） | yes | Mac 3 + Android 3 项测试 | Moto 从经过认证的欢迎消息中存储了 "<owner name>" | iOS 查看后 |
+| caffeinate -dis | 已调查（只读） | n/a | 10 月 28 日 22:49 在 Zed 终端标签页（ttys005）中手动启动，永久运行；不是 MeowDisplay；保持运行 | n/a |
 
-Installed 23:2x: Mac Dev ec6c4f7; iPhone 2000050; Moto ec6c4f7. iPad still 2000048 (locked).
-Evidence: evidence/extend-p0-2026-10-30/README.md, evidence/p1-2026-10-30/.
-| Camera Mode / Microphone Mode (brief 2026-10-29) | **not built**; owner chose to skip for now (23:4x). Needs a CoreMediaIO camera system extension (app in /Applications, owner approval) and a Core Audio HAL plug-in (admin) | — | — | no |
-| Stale rows above: "Per-app menu bar following tabs: Not started" is built (bed6359 iOS, a1d8ea9 Android, 5116572/a6d4523 fixes); "Custom layout editor, Function Tray chord editor (Android): MISSING" is built (35d3022, on this branch) | — | — | — | — |
+23:2x 安装：Mac Dev ec6c4f7；iPhone 2000050；Moto ec6c4f7。iPad 仍为 2000048（已锁定）。
+证据：evidence/extend-p0-2026-10-30/README.md、evidence/p1-2026-10-30/。
+| 摄像头模式 / 麦克风模式（2026-10-29 简报） | **未构建**；所有者选择暂时跳过（23:4x）。需要 CoreMediaIO 摄像头系统扩展（App 位于 /Applications，需所有者批准）和 Core Audio HAL 插件（管理员权限） | — | — | no |
+| 上文过时行：“每 App 菜单栏跟随标签页：未开始”已构建（bed6359 iOS、a1d8ea9 Android、5116572/a6d4523 修复）；“自定义布局编辑器、功能托盘组合键编辑器（Android）：MISSING”已构建（35d3022，在本分支上） | — | — | — | — |
 
-AltTab dialogs, 23:4x: no AltTab process or file left; the 49 leftover alerts belonged to macOS's
-UserNotificationCenter (running since Oct 28, holding AltTab's queued requests). Ended it with
-SIGTERM at the owner's request (launchd restarts it on demand); all alert windows gone.
+AltTab 对话框，23:4x：没有残留的 AltTab 进程或文件；49 个残留提醒属于 macOS 的
+UserNotificationCenter（自 10 月 28 日起运行，持有 AltTab 排队的请求）。应所有者要求用
+SIGTERM 结束它（launchd 会按需重启）；所有提醒窗口已消失。
 
-## After midnight 2026-10-31 (final local brief + addendum; commits 058bbe4 … 752f3c3, pushed with the branch)
+## 2026-10-31 午夜之后（最终本地简报 + 附录；提交 058bbe4 … 752f3c3，随分支推送）
 
-| Item | Implemented | Automated | Physical | Release-ready |
+| 项目 | 已实现 | 自动化 | 物理 | 可发布 |
 |---|---|---|---|---|
-| Window mode: View Only Request Control pill inside the selected pane (058bbe4 iOS, 2747368 Android) | yes | PaneRequestControlTests 5 (+64 related); Android suite | Moto: pill in pane (earlier run); iPhone not re-checked by hand | yes, pending owner glance on iPhone/iPad |
-| Mission Control pauses panes, no restart loop; notice "Mission Control is open on your Mac. Video is paused."; one pane offers Exit Mission Control (control) or inline Request Control (0941f86, 752f3c3) | yes (Mac, iOS/iPadOS, Android) | MissionControlTests 8; Android WorkspaceWireTest; full Android 994/994 | Moto + iPhone, keyboard entry/exit: detect 0.7 s, all panes live again 0.1–0.3 s after close with 0 restarts; 3 rapid cycles clean; two receivers share one detection. Evidence: evidence/mission-control-2026-10-31/ | Exit with control and trackpad-gesture entry not tested by hand (need owner); Privacy Shield covering + Mission Control not tested; iPad not installed (unavailable) |
-| Spatial Overview (owner asked) | already built: Shared/SpatialOverview.swift, iOS StagePeekGallery (iPhone + iPad), Android StagePeekOverlay; setting Expanded Layout ▸ Spatial Overview | existing tests | — | yes |
+| 窗口模式：所选窗格内显示仅查看“请求控制”胶囊（058bbe4 iOS、2747368 Android） | yes | PaneRequestControlTests 5（+64 相关）；Android 套件 | Moto：窗格内胶囊（较早的运行）；iPhone 未手动复检 | yes，待所有者在 iPhone/iPad 上查看 |
+| 调度中心暂停窗格，无重启循环；提示“Mac 上已打开调度中心。视频已暂停。”；一个窗格提供“退出调度中心”（需控制权）或内联“请求控制”（0941f86、752f3c3） | yes（Mac、iOS/iPadOS、Android） | MissionControlTests 8；Android WorkspaceWireTest；完整 Android 994/994 | Moto + iPhone，键盘进入/退出：检测 0.7 秒，关闭后所有窗格在 0.1–0.3 秒内恢复实时，0 次重启；连续 3 次快速循环无问题；两个接收端共享一次检测。证据：evidence/mission-control-2026-10-31/ | 带控制权退出和触控板手势进入未手动测试（需要所有者）；隐私护盾遮盖 + 调度中心未测试；iPad 未安装（不可用） |
+| 空间总览（所有者要求） | 已构建：Shared/SpatialOverview.swift、iOS StagePeekGallery（iPhone + iPad）、Android StagePeekOverlay；设置 展开布局 ▸ 空间总览 | 现有测试 | — | yes |
 
-Installed 00:12: Mac Dev 0941f86; iPhone 2000052; Moto 752f3c3. iPad still 2000048 (unavailable).
+00:12 安装：Mac Dev 0941f86；iPhone 2000052；Moto 752f3c3。iPad 仍为 2000048（不可用）。
 
 
-## iPad QA 2026-10-31 (owner hands-on; commits cdeda71, b94abf6 and the names commit; pushed)
+## iPad QA 2026-10-31（所有者手动验证；提交 cdeda71、b94abf6 和名称提交；已推送）
 
-Device: iPad (9th generation, iPad12,1), iPadOS 27.0.1, Developer Mode on. Builds installed in place
-(no uninstall; pairing kept: same device ID admitted after each update): 2000053 → 2000058.
-Mac Dev = cdeda71 (Smart Touch depth fix). iPhone = 2000058. Moto = b94abf6 debug.
+设备：iPad（第 9 代，iPad12,1），iPadOS 27.0.1，开发者模式开启。构建原地安装
+（未卸载；保留配对：每次更新后同一设备 ID 均被准入）：2000053 → 2000058。
+Mac Dev = cdeda71（Smart Touch 深度修复）。iPhone = 2000058。Moto = b94abf6 debug。
 
-| Check | Result |
+| 检查 | 结果 |
 |---|---|
-| Connect, Window mode, two panes (Finder, Chrome), pane selection | pass |
-| Pinch zoom, pan, per-tab rotation, Reset View | pass |
-| Spatial Overview / adaptive iPad layout, rotation portrait ↔ landscape | pass |
-| View Only Request Control pill in the pane; approval on the Mac; typing and taps reach the Mac | pass |
-| Mission Control: notice, panes paused without restarts, recovery; Exit Mission Control with control | pass (Mac log: 6 open/close cycles, 0 restarts) |
-| iPad + Moto at the same time | pass (00:45) |
-| Mirror and Extend from the home screen | pass |
-| Scrolling | FAILED first (two-finger drag moved a zoomed pane; Smart Touch gave up at 12 AX levels in Chrome) → fixed cdeda71 → pass |
-| Dragging an app from the peek | FAILED first (offset from the finger; two Drop Here to Cancel zones) → fixed cdeda71 → pass |
-| Peek toolbar while the compact peek scrolls | FAILED first (jitter) → fixed b94abf6 (iOS + Android) → reported fixed |
-| Share from the long-press menu, toolbar and preview | FAILED first (copies rejected by a /private path check, silent) → fixed b94abf6 → share sheet opens |
-| Save to Device | FAILED first (same; then a crash: Photos block isolated to the main actor) → fixed b94abf6 → pass (photos to Photos, other files to Files ▸ MeowDisplay ▸ Downloads, message says where) |
-| Expanded view: tap empty space closes it | built b94abf6 (owner asked) |
-| Apps bar: widens on scroll, pull down for rows up to all apps with names, handle, swipe up to compact; All Apps closes with a swipe up | built b94abf6 + names commit (iPhone/iPad only; Android not built) |
-| Apps bar opens to four rows, then the whole screen, stopping above Expand and Close (Compact shrinks it); search filters the apps bar | built 70d3507 + 9b8ba92, iOS 2000061 (search also filters Android's apps row); StagePeekDockLayoutTests 5/5; not yet checked by hand |
-| Android crash on session end (InterruptedException while closing) | found in the Moto's crash log, fixed b94abf6 with a test |
+| 连接、窗口模式、两个窗格（Finder、Chrome）、窗格选择 | 通过 |
+| 捏合缩放、平移、每标签页旋转、重置视图 | 通过 |
+| 空间总览 / 自适应 iPad 布局、竖屏 ↔ 横屏旋转 | 通过 |
+| 窗格内的仅查看“请求控制”胶囊；在 Mac 上批准；输入和点按可到达 Mac | 通过 |
+| 调度中心：提示、窗格暂停且不重启、恢复；带控制权退出调度中心 | 通过（Mac 日志：6 次打开/关闭循环，0 次重启） |
+| iPad + Moto 同时连接 | 通过（00:45） |
+| 从主页镜像和扩展 | 通过 |
+| 滚动 | 首次 FAILED（两指拖拽移动了已缩放的窗格；Smart Touch 在 Chrome 的 12 层 AX 后放弃）→ 已修复 cdeda71 → 通过 |
+| 从台前预览拖拽 App | 首次 FAILED（与手指有偏移；出现两个“拖到此处取消”区域）→ 已修复 cdeda71 → 通过 |
+| 紧凑台前预览滚动时的预览工具栏 | 首次 FAILED（抖动）→ 已修复 b94abf6（iOS + Android）→ 报告已修复 |
+| 从长按菜单、工具栏和预览共享 | 首次 FAILED（副本被 /private 路径检查拒绝，且无提示）→ 已修复 b94abf6 → 共享面板可打开 |
+| 存储到设备 | 首次 FAILED（同样问题；随后崩溃：Photos 代码块被隔离到主 actor）→ 已修复 b94abf6 → 通过（照片存入“照片”，其他文件存入“文件” ▸ MeowDisplay ▸ 下载，并提示位置） |
+| 展开视图：点按空白处关闭 | 已构建 b94abf6（所有者要求） |
+| App 栏：滚动时变宽，下拉展开到包含全部 App 名称的行，把手，上滑收起；“所有 App”上滑关闭 | 已构建 b94abf6 + 名称提交（仅 iPhone/iPad；Android 未构建） |
+| App 栏先展开四行，再展开整个屏幕，停在“展开”和“关闭”上方（“紧凑”会缩小它）；搜索会过滤 App 栏 | 已构建 70d3507 + 9b8ba92，iOS 2000061（搜索也会过滤 Android 的 App 行）；StagePeekDockLayoutTests 5/5；尚未手动检查 |
+| Android 会话结束时崩溃（关闭时的 InterruptedException） | 在 Moto 崩溃日志中发现，已用测试在 b94abf6 中修复 |
 
-Not checked on the iPad: VoiceOver walkthrough, Larger Text, the Privacy Shield covering (the
-owner's privacyShield.local is off). Automated live XCUITests on the iPad skip without a saved
-Window layout (its layout was empty at first).
+iPad 上未检查：VoiceOver 走查、更大字体、隐私护盾遮盖（所有者的
+privacyShield.local 处于关闭状态）。iPad 上的自动化实时 XCUITest 在没有保存的
+窗口布局时会跳过（其布局最初为空）。

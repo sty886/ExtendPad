@@ -1,42 +1,42 @@
-<!-- Sanitized copy of the integration folder's evidence/extend-p0-2026-10-30/README.md (2026-10-31). Local paths and personal names removed; the integration folder holds the original and evidence. -->
+<!-- 集成文件夹中 evidence/extend-p0-2026-10-30/README.md 的脱敏副本（2026-10-31）。本地路径和个人姓名已移除；原件与证据保存在集成文件夹中。 -->
 
-# Extend start latency (P0), 2026-10-30 night
+# 扩展启动延迟（P0），2026-10-30 夜间
 
-## Cause
-macOS's capture service (replayd) answers ScreenCaptureKit requests from every app in turn.
-AltTab 10.8.0 (installed; macOS 27.0) sends bursts of window-screenshot requests after display
-changes and other events, the problem in alt-tab-macos#5861, fixed in AltTab 11.4.4 (lazy
-previews). Our content requests waited behind those bursts: 21:58, request sent 21:58:05.059,
-served 21:58:14.12 (9 s); next one sent 21:58:14.177, served 21:58:41.5 (27 s); SCStream start
-itself 31 ms. Source: tccd "requestor replayd ... accessor com.lwouis.alt-tab-macos" lines
-(about 2 a second during bursts) plus ScreenCaptureKit lines in the Dev app's unified log.
-Not the Privacy Shield: covering with no new display (21:30, 21:40), AltTab sent nothing.
-Earlier fast Extend starts (17:06, 18:24, 18:42: about 2 s) had no burst in the way.
+## 原因
+macOS 的采集服务（replayd）会依次处理来自每个 App 的 ScreenCaptureKit 请求。
+AltTab 10.8.0（已安装；macOS 27.0）在显示器变化和其他事件后发送成批的窗口截图请求，
+即 alt-tab-macos#5861 中的问题，已在 AltTab 11.4.4 中修复（延迟预览）。我们的内容请求
+排在这些批量请求之后：21:58 的请求于 21:58:05.059 发出，21:58:14.12 才得到响应（9 秒）；
+下一个于 21:58:14.177 发出，21:58:41.5 得到响应（27 秒）；SCStream 启动本身耗时 31 ms。
+来源：tccd 的 "requestor replayd ... accessor com.lwouis.alt-tab-macos" 行（批量期间每秒约 2 条）
+以及 Dev App 统一日志中的 ScreenCaptureKit 行。
+不是隐私护盾：在没有新显示器时进行遮盖（21:30、21:40），AltTab 没有发送任何请求。
+较早的快速扩展启动（17:06、18:24、18:42：约 2 秒）没有遇到批量请求。
 
-## Our side (commits e268f46, ed34d39, 0ea6ebf)
-- One shared broker for ScreenCaptureKit content (`Mac/CoalescingFetch.swift`,
-  `Mac/ShareableContentBroker.swift`): callers share requests (at most two out), reuse recent
-  answers until a display or the shield's windows change, waits are bounded (45 s budget for
-  listing a display, then a clear error) and cancellable (checked every second).
-- Extend lists its display and the shield windows from one answer (was two requests in a row).
-- A display just created is found in the first answer from any request started after it existed.
-- `startTrace id=xxxx mode=... stage=... t=ms dt=ms` lines from admission to first encoded frame,
-  one id per session.
+## 我们这边（提交 e268f46、ed34d39、0ea6ebf）
+- 一个共享的 ScreenCaptureKit 内容代理（`Mac/CoalescingFetch.swift`、
+  `Mac/ShareableContentBroker.swift`）：调用方共享请求（最多两个未完成），复用最近的
+  响应直到显示器或护盾窗口变化，等待有界（列出显示器有 45 秒预算，之后给出明确错误）
+  且可取消（每秒检查）。
+- 扩展从一次响应中列出其显示器和护盾窗口（原本是连续两次请求）。
+- 刚刚创建的显示器，会出现在其存在之后启动的任何请求的首次响应中。
+- 从准入到首帧编码的 `startTrace id=xxxx mode=... stage=... t=ms dt=ms` 日志行，
+  每个会话一个 id。
 
-## Measurements (Mac side, admission to first captured frame; Moto unless noted)
-| Run | Build | AltTab | Result |
+## 测量（Mac 侧，准入到首帧采集；除非注明为 Moto）
+| 运行 | 构建 | AltTab | 结果 |
 |---|---|---|---|
-| before (21:54, 21:58, 22:03) | 7f8a0f1 | running | 31.9 s, 36.9 s, 61.5 s (iPhone, with a Moto Mirror start queued behind it) |
-| A1b cold 22:38 | e268f46 | running | 19.2 s (listing 14.1 s, stream start 4.7 s, both queued in replayd) |
-| A2 warm 22:39 | e268f46 | running | 20.3 s |
-| B1 cold 22:45 (auto-reconnect after relaunch) | ed34d39 | quitting | 0.85 s |
-| B2 warm 22:47 | ed34d39 | quit | 0.68 s (first encoded 0.74 s) |
-| B3 22:48, iPhone Extend while the Moto mirrored | ed34d39 | quit | 1.17 s; the Moto's Mirror start, made at the same moment as an iPhone start, 0.12 s |
-| C1 warm 22:50 | ed34d39 | reopened | 21.2 s (an answer at 5.4 s was discarded: fixed in 0ea6ebf, not yet measured) |
+| 之前（21:54、21:58、22:03） | 7f8a0f1 | 运行中 | 31.9 秒、36.9 秒、61.5 秒（iPhone，其后排队着一个 Moto 镜像启动） |
+| A1b 冷启动 22:38 | e268f46 | 运行中 | 19.2 秒（列出 14.1 秒，流启动 4.7 秒，两者都在 replayd 中排队） |
+| A2 热启动 22:39 | e268f46 | 运行中 | 20.3 秒 |
+| B1 冷启动 22:45（重启后自动重连） | ed34d39 | 正在退出 | 0.85 秒 |
+| B2 热启动 22:47 | ed34d39 | 已退出 | 0.68 秒（首帧编码 0.74 秒） |
+| B3 22:48，Moto 镜像时 iPhone 扩展 | ed34d39 | 已退出 | 1.17 秒；Moto 的镜像启动与 iPhone 启动同时发起，耗时 0.12 秒 |
+| C1 热启动 22:50 | ed34d39 | 重新打开 | 21.2 秒（5.4 秒时的一次响应被丢弃：已在 0ea6ebf 中修复，尚未测量） |
 
-| cold 23:07 (auto-reconnect right after relaunch) | 0ea6ebf | removed | 2.43 s (first video encoder in the process 1.5 s; listing 0.35 s) |
+| 冷启动 23:07（重启后立即自动重连） | 0ea6ebf | 已移除 | 2.43 秒（进程内首个视频编码器 1.5 秒；列出 0.35 秒） |
 
-AltTab was removed at the owner's request at 23:0x (app, preferences, caches, launch agent, its
-permissions), so 0ea6ebf can't be measured against it any more. Mac app while streaming Extend to
-the Moto: 17% CPU, 113 MB resident. Mirror first frame 0.12–0.18 s; Window first frame 1–4 s
-(earlier runs). Not measured: iPad; frame continuity of a running session during another start.
+AltTab 已于 23:0x 应所有者要求移除（App、偏好设置、缓存、启动代理及其权限），
+因此无法再针对 0ea6ebf 进行对比测量。向 Moto 推流扩展时的 Mac App：CPU 17%，
+常驻内存 113 MB。镜像首帧 0.12–0.18 秒；窗口首帧 1–4 秒（较早的运行）。
+未测量：iPad；另一次启动期间运行中会话的帧连续性。

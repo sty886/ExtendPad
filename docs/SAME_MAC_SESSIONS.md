@@ -1,116 +1,122 @@
-# Several people on one Mac (Fast User Switching)
+# 一台 Mac 上的多名用户（快速用户切换）
 
-Several people can be logged in to one Mac at once, each running their own
-MeowDisplay. This page records what macOS allows, what MeowDisplay does
-about it, and what still needs two real logged-in accounts to confirm.
+多名用户可以同时登录一台 Mac，各自运行自己的
+MeowDisplay。本页记录 macOS 允许什么、MeowDisplay 对此做了什么，以及
+仍需要两个真实登录账户来确认什么。
 
-**Status:** implemented as an opt-in for discovery and labelling, plus a
-security fix to the sender's input gate. Verified by unit tests and builds
-only. Nothing here has run with two logged-in accounts: a single person
-running two sessions on one Mac is **not** a test of two Macs, and the
-checklist below is the only evidence that counts.
+**状态：** 已作为发现和标注的主动启用项实现，并包含对发送端
+输入门禁的安全修复。仅由单元测试和构建验证。这里的内容都还没有在
+两个登录账户下运行过：一个人在一台 Mac 上运行两个会话**不是**对两台 Mac
+的测试，下面的清单才是唯一有效的证据。
 
-## What macOS allows (investigation)
+## macOS 允许什么（调查）
 
-| Question | Finding | Evidence |
+| 问题 | 发现 | 证据 |
 | --- | --- | --- |
-| Can several sender processes coexist across users? | Yes. Each login session runs its own MeowDisplay process with its own Keychain (identity, install id, pins), preferences and privacy (TCC) grants. | Per-user Keychain and defaults are how MeowDisplay already stores everything (`TrustStore`, `UserDefaults.standard`). |
-| Do their listeners conflict? | The Mac-pairing advertisement (`_opendisplay-mac-pair._tcp`) uses a system-assigned port: no conflict. Media is always dialed out by the sender: no conflict. Two listeners use fixed ports: the Remote Access knock (TCP 9003) and Pair over Remote (TCP 9004). Only one session can hold each; the other session's knock listener keeps retrying and its Pair over Remote reports "Couldn't start". The display role (receiver, 9001/9002) is already one per Mac (`UNIFIED_MAC_APP.md`). | `startPairingListener` (no port), `startRemoteConnectRequestListener` (9003), `openRemotePairing` (9004); a second bind on a fixed port fails with "address in use" (measured for the receiver, `UNIFIED_MAC_APP.md`). |
-| Are inactive sessions capturable? | No, by design. A switched-out session has nothing on screen; ScreenCaptureKit stops its stream (reported as `.userStopped`) and the existing recovery path waits, without spending its retry budget, until the session is in front again. MeowDisplay never tries to capture another session. | `MacSender.consoleIsInteractive` / `consoleCanCapture`. Hardware behaviour unverified. |
-| Does authorized remote input reach the intended session? | Only the session on the console has a screen to type into. **Before this change the sender's input gate did not check this.** A receiver still holding control of a switched-out session could keep posting events while someone else used the Mac. Now switching out **ends control**: every session's input grant is revoked (the receiver is told Control is off and resets its own held state), held keys, modifiers, mouse and pointer buttons, pen contact and proximity are released (native magnify/rotate are never injected, as macOS has no API for it; their bookkeeping is reset), a request still waiting on the owner is retired, and no request is granted until the session is back on the console, Always Allow included. The injector also refuses every event while switched out. | `LoginSessionConsole`, `InputInjector.inputIsAllowed`, `SenderController.loginSessionConsoleChanged`, `InputControlRequestRoute`, `MacSender.grantSessionInput`. The releases are posted when macOS reports the switch (`sessionDidResignActive`); whether events posted from a background session reach it is not documented, so checklist rows 4–5 are what confirms nothing stays held. |
-| Do role ownership and permission checks stay isolated? | Yes. The display role's ownership lock is per user (by design, `UNIFIED_MAC_APP.md`); trust, approval policy and input grants are per process and keyed by pinned install ids. Nothing is shared between accounts. | Existing `RolePreferences`, `TrustStore`, `ReceiverOwnershipLock`. |
-| Can one receiver choose between the sessions reliably? | Yes, as separate senders: each session has its own install id and pins, so it pairs and connects on its own. What was missing was telling them apart: every session advertised the Mac's name, so receivers saw "Family MacBook", "Family MacBook (2)". | mDNS renames duplicate instance names. |
-| What happens on lock, sleep, logout and switching? | **Lock:** the session stays on the console; existing lock-screen behaviour is unchanged. **Sleep:** the whole Mac sleeps; every session behaves as today. **Logout:** that session's process quits and its advertisement disappears; the others stay listed. **Switch away:** control ends at once (grants revoked, held input released); an opted-in advertisement turns "switched out"; capture waits. **Switch back:** capture resumes and the advertisement turns available; control must be requested again (Always Allow devices get it on request, as on any new connection). | Session notifications from `NSWorkspace`; TXT `ss`. |
-| Can a standard (non-administrator) account take part? | It can run MeowDisplay and pair; its Keychain and preferences are its own. Granting Screen Recording and Accessibility, and installing Sparkle updates into `/Applications`, may need an administrator's credentials. **Unverified.** | Physical checklist row 9. |
+| 多个发送端进程能否跨用户共存？ | 能。每个登录会话运行自己的 MeowDisplay 进程，拥有自己的钥匙串（身份、安装 id、固定项）、偏好设置和隐私（TCC）授权。 | 每用户钥匙串和偏好设置正是 MeowDisplay 现有的存储方式（`TrustStore`、`UserDefaults.standard`）。 |
+| 它们的监听器会冲突吗？ | Mac 配对广播（`_opendisplay-mac-pair._tcp`）使用系统分配的端口：不冲突。媒体始终由发送端拨出：不冲突。有两个监听器使用固定端口：远程访问敲门（TCP 9003）和远程配对（TCP 9004）。每个端口只能由一个会话持有；另一个会话的敲门监听器会不断重试，其远程配对会报告“无法启动”。显示角色（接收端，9001/9002）已经是每 Mac 一个（`UNIFIED_MAC_APP.md`）。 | `startPairingListener`（无端口）、`startRemoteConnectRequestListener`（9003）、`openRemotePairing`（9004）；对固定端口的第二次绑定会以“address in use”失败（针对接收端测量，`UNIFIED_MAC_APP.md`）。 |
+| 非活动会话能被采集吗？ | 不能，这是设计使然。被切换出去的会话屏幕上没有任何内容；ScreenCaptureKit 会停止其流（报告为 `.userStopped`），现有的恢复路径会等待，直到该会话重新回到前台，且不消耗其重试预算。MeowDisplay 从不尝试采集另一个会话。 | `MacSender.consoleIsInteractive` / `consoleCanCapture`。硬件行为未验证。 |
+| 经授权的远程输入会到达预期会话吗？ | 只有控制台上的会话才有屏幕可供输入。**在此更改之前，发送端的输入门禁没有检查这一点。** 仍持有被切换出会话控制权的接收端，可能在别人使用 Mac 时继续发送事件。现在切换出去会**结束控制**：每个会话的输入授权都被撤销（接收端被告知控制已关闭，并重置自己持有的状态），按住的按键、修饰键、鼠标和指针按钮、笔接触和接近状态都会被释放（原生放大/旋转从不注入，因为 macOS 没有相应 API；其记录会被重置），仍在等待所有者批准的请求会被作废，并且在会话回到控制台之前不会批准任何请求，包括“始终允许”。注入器在切换出去期间也会拒绝每一个事件。 | `LoginSessionConsole`、`InputInjector.inputIsAllowed`、`SenderController.loginSessionConsoleChanged`、`InputControlRequestRoute`、`MacSender.grantSessionInput`。释放事件在 macOS 报告切换时发布（`sessionDidResignActive`）；后台会话发布的事件是否能到达该会话没有文档说明，因此清单第 4–5 行才是确认没有状态被按住的依据。 |
+| 角色所有权和权限检查是否保持隔离？ | 是。显示角色的所有权锁是每用户的（设计如此，`UNIFIED_MAC_APP.md`）；信任、批准策略和输入授权是每进程的，并以固定的安装 id 为键。账户之间不共享任何内容。 | 现有的 `RolePreferences`、`TrustStore`、`ReceiverOwnershipLock`。 |
+| 接收端能否可靠地在会话之间选择？ | 能，作为独立的发送端：每个会话有自己的安装 id 和固定项，因此可以独立配对和连接。缺的是区分它们：每个会话都广播 Mac 的名称，因此接收端会看到“Family MacBook”、“Family MacBook (2)”。 | mDNS 会重命名重复的实例名称。 |
+| 锁定、睡眠、注销和切换时会发生什么？ | **锁定：** 会话仍留在控制台上；现有锁屏行为不变。**睡眠：** 整台 Mac 睡眠；每个会话的行为与今天相同。**注销：** 该会话的进程退出，其广播消失；其他会话仍被列出。**切换离开：** 控制立即结束（撤销授权、释放按住的输入）；主动启用的广播会变为“已切换用户”；采集等待。**切换回来：** 采集恢复，广播变为可用；必须重新请求控制（“始终允许”设备按请求获得控制，和任何新连接一样）。 | 来自 `NSWorkspace` 的会话通知；TXT `ss`。 |
+| 标准（非管理员）账户能否参与？ | 它可以运行 MeowDisplay 并配对；其钥匙串和偏好设置属于它自己。授予屏幕录制和辅助功能权限，以及把 Sparkle 更新安装到 `/Applications`，可能需要管理员凭据。**未验证。** | 物理清单第 9 行。 |
 
-## Identity, kept apart
+## 身份，彼此隔离
 
-| Layer | What it is | Used for |
+| 层级 | 它是什么 | 用途 |
 | --- | --- | --- |
-| Physical host grouping hint | TXT `hg`: a 16-hex-digit digest of the Mac's local host name (`SenderSessionAdvertisement.hostGroup`). Every session reads the same system-wide name, so they agree without sharing a file or a privileged helper. The host name is already public on the network (mDNS publishes it); the digest adds no hardware identifier. | Arranging the Nearby list only. |
-| Login session | TXT `sl` (the label the user typed, never the account name) and `ss` (`a` on the console, `i` switched out). | Labels and availability only. |
-| MeowDisplay installation | TXT `id` / `hello.id`: the per-user install id, unchanged. | Which sender a row is. |
-| Trust | The pinned TLS key of that install, unchanged. | Pairing, admission, input. |
+| 物理主机分组提示 | TXT `hg`：Mac 本地主机名的 16 位十六进制摘要（`SenderSessionAdvertisement.hostGroup`）。每个会话读取同一个系统级名称，因此它们无需共享文件或特权辅助程序就能达成一致。主机名在网络中已是公开的（mDNS 会发布它）；摘要不增加任何硬件标识。 | 仅用于排列“附近”列表。 |
+| 登录会话 | TXT `sl`（用户键入的标签，绝不是账户名）和 `ss`（控制台上为 `a`，切换出去为 `i`）。 | 仅用于标签和可用性。 |
+| MeowDisplay 安装 | TXT `id` / `hello.id`：每用户安装 id，未改变。 | 一行对应哪个发送端。 |
+| 信任 | 该安装的固定 TLS 密钥，未改变。 | 配对、准入、输入。 |
 
-Every TXT field is unauthenticated. Grouping never grants trust, never
-bypasses pairing and never merges two sessions' pins or settings. A row
-that says "Alex" is a sender that *claims* the label "Alex"; pairing still
-shows the code on that session's screen, and only that session's user can
-confirm it.
+每个 TXT 字段都未认证。分组绝不授予信任，绝不绕过配对，也绝不合并
+两个会话的固定项或设置。显示“Alex”的行是一个*声称*标签为“Alex”的
+发送端；配对仍会在该会话的屏幕上显示验证码，只有该会话的用户才能
+确认。
 
-A spoofed advertisement on the same network is the residual risk, as it
-already is for any nearby Mac name. Receivers group by the digest **and**
-the Mac's name together, so copying a Mac's digest under another name only
-creates a separate row; it can't rename the heading or join the group. A
-perfect copy of both lands under the heading as an **unpaired** row (Pair,
-not Connect), and can only become trusted through its own code comparison.
-Paired rows are recognized by pinned install id, never by their place in a
-group (`SameMacSessionTests.testACopiedDigestUnderAnotherNameIsItsOwnRow`).
+同一网络上的伪造广播是残余风险，正如它对任何附近 Mac 名称一样。
+接收端同时按摘要**和** Mac 名称分组，因此在另一个名称下复制一台 Mac 的
+摘要只会创建单独的一行；它不能重命名标题或加入分组。两者的完美副本会
+作为**未配对**行落在该标题下（显示配对，而不是连接），并且只能通过
+自己的验证码比较获得信任。已配对的行通过固定的安装 id 识别，绝不通过
+其在分组中的位置（`SameMacSessionTests.testACopiedDigestUnderAnotherNameIsItsOwnRow`）。
 
-## What was implemented
+## 实现了什么
 
-- **Sender, always on:** the input gate requires this login session to be on
-  the console; switching out revokes every input grant, releases held input
-  and retires pending control requests, and a switched-out session grants
-  none (`Mac/LoginSession.swift`, `InputInjector`,
-  `SenderController.observeLoginSessionSwitching`, `InputControlRequestRoute`).
-- **Sender, opt-in per user:** Settings → System → **Other People on This
-  Mac**: a session name and **List My Session Separately**. Off by default,
-  so an ordinary install advertises exactly what it did before. When on:
-  - the Mac-pairing advertisement is named "Family MacBook — Alex" and carries `hg`, `hn`, `sl`, `ss`;
-  - new pairings use the same name, so a receiver's paired list tells the sessions apart (existing pairings keep the name they were made with);
-  - switching out republishes `ss`.
-- **Receivers** (`Shared/MacSessionDiscovery.swift`, pure and shared):
-  - **iPhone/iPad:** the Macs card on Home lists each session as its own row ("Family MacBook — Alex"); a switched-out session shows **Switched Out** instead of Pair/Connect.
-  - **Mac receiver:** the row reads "Family MacBook — Alex"; Pair is disabled while that session is switched out.
-  - **Android:** uses the same rules (port of `NearbyMacDirectory`).
-- **Malformed hints** (bad digest, missing name or label, oversize label, no install id) drop all four fields: that sender is listed as an ordinary Mac. The same install seen twice is one row; duplicate labels get a suffix; same-named Macs with different host names are never merged.
+- **发送端，始终开启：** 输入门禁要求此登录会话位于控制台上；切换出去会
+  撤销每个输入授权、释放按住的输入并作废待处理的控制请求，而被切换出去的
+  会话不授予任何控制（`Mac/LoginSession.swift`、`InputInjector`、
+  `SenderController.observeLoginSessionSwitching`、`InputControlRequestRoute`）。
+- **发送端，每用户主动启用：** 设置 → 系统 → **此 Mac 上的其他用户**：
+  会话名称和 **单独列出我的会话**。默认关闭，因此普通安装广播的内容与
+  之前完全相同。开启时：
+  - Mac 配对广播命名为“Family MacBook — Alex”，并携带 `hg`、`hn`、`sl`、`ss`；
+  - 新的配对使用相同名称，因此接收端的已配对列表能区分会话（现有配对保留其创建时的名称）；
+  - 切换出去会重新发布 `ss`。
+- **接收端**（`Shared/MacSessionDiscovery.swift`，纯逻辑且共享）：
+  - **iPhone/iPad：** 主页上的 Mac 卡片会把每个会话列成独立一行（“Family MacBook — Alex”）；已切换用户的会话显示 **已切换用户**，而不是“配对/连接”。
+  - **Mac 接收端：** 该行显示“Family MacBook — Alex”；该会话切换出去时“配对”被禁用。
+  - **Android：** 使用相同规则（`NearbyMacDirectory` 的移植）。
+- **格式错误的提示**（摘要错误、名称或标签缺失、标签过长、没有安装
+  id）会丢弃全部四个字段：该发送端作为普通 Mac 列出。同一安装出现两次
+  只算一行；重复标签会获得后缀；名称相同但主机名不同的 Mac 绝不会合并。
 
-Not done, by design:
-- no automatic cross-account launch;
-- no privileged helper;
-- no capture or input across sessions;
-- no change to the fixed Remote Access ports (one session per Mac can use Remote Access; documented above).
+未做，按设计：
+- 不自动跨账户启动；
+- 没有特权辅助程序；
+- 不跨会话采集或输入；
+- 不更改固定的远程访问端口（每台 Mac 只有一个会话能使用远程访问；如上文所述）。
 
-## Automated coverage
+## 自动化覆盖
 
-`MacTests/SameMacSessionTests.swift` (18 tests):
-- synthetic sessions: three sessions, one switched out, next to an ordinary Mac;
-- duplicate labels, the same sender seen twice, same-named Macs on different hosts;
-- seven malformed advertisements and a hint without an install id;
-- an unknown state value, and logout of one session;
-- opt-in rules: off by default, never the account name, per-user defaults;
-- Bonjour length limits, the host digest not containing the name;
-- the console state's change reporting, and that this runner reads as on console (no change for Macs without Fast User Switching);
-- a switched-out session refuses every control request under every policy, and a request pending at switch-out can't grant afterwards and leaves no cooldown.
+`MacTests/SameMacSessionTests.swift`（18 项测试）：
+- 合成会话：三个会话，其中一个已切换出去，与一台普通 Mac 并列；
+- 重复标签、同一发送端出现两次、不同主机上同名的 Mac；
+- 七种格式错误的广播，以及一个没有安装 id 的提示；
+- 未知状态值，以及注销其中一个会话；
+- 主动启用规则：默认关闭、绝不使用账户名、每用户偏好设置；
+- Bonjour 长度限制、主机摘要不包含名称；
+- 控制台状态的变更报告，以及此运行器被读取为位于控制台（没有快速用户切换的 Mac 不会有变化）；
+- 已切换出去的会话在每种策略下都拒绝每个控制请求，切换出去时仍待处理的请求之后无法授予，也不会留下冷却。
 
-The controller wiring (`loginSessionConsoleChanged` calling
-`revokeSessionInput`, which is the existing manual-revoke path with its
-held-input release and `inputReset`) and the CGEvent releases themselves
-are not reachable from the hostless test target; rows 4–5 below cover them.
+控制器接线（`loginSessionConsoleChanged` 调用
+`revokeSessionInput`，即现有的手动撤销路径，包含按住输入的释放和
+`inputReset`）以及 CGEvent 释放本身，无法从无宿主测试目标访问；
+下面的第 4–5 行覆盖它们。
 
-### Spoofing and disclosure, verified
+### 欺骗与信息披露，已验证
 
-- **Trust:** grouping, labels and availability are read only by `NearbyMacDirectory`, which produces display rows. Pairing, admission and input read only the pinned install id and TLS key (`TrustStore`, `SenderSessionAuthorization`); none of them read `hg`, `hn`, `sl` or `ss`. A spoofed row is unpaired until its own code comparison succeeds. One reusing a paired install's id gets nothing either: Connect only publishes a token in the receiver's own advertisement, and every connection that follows (the Mac dialing in, the Remote Access knock) is mutual TLS pinned to that install's key (`StreamReceiver.requestConnect`, `requestRemoteConnect`, `TLSConfigurator`).
-- **Grouping:** a copied digest under another name is its own row; malformed hints fall back to an ordinary row; whichever advertisement arrives first, the heading is the same (tests above).
-- **Disclosure:** a session that hasn't opted in publishes exactly what it did before (no `hg`/`hn`/`sl`/`ss`), so nothing says which accounts exist; an opted-in one publishes only the label its user typed, never the account name. No session reads another account's data.
+- **信任：** 分组、标签和可用性只由 `NearbyMacDirectory` 读取，它生成
+  显示行。配对、准入和输入只读取固定的安装 id 和 TLS 密钥
+  （`TrustStore`、`SenderSessionAuthorization`）；它们都不读取 `hg`、`hn`、`sl`
+  或 `ss`。伪造的行在它自己的验证码比较成功之前都是未配对的。复用已配对
+  安装 id 的行也得不到任何东西：连接只在接收端自己的广播中发布令牌，而
+  之后的每个连接（Mac 拨入、远程访问敲门）都是与该安装密钥固定的双向
+  TLS（`StreamReceiver.requestConnect`、`requestRemoteConnect`、`TLSConfigurator`）。
+- **分组：** 在另一个名称下复制的摘要会成为单独一行；格式错误的提示
+  回退为普通行；无论哪个广播先到达，标题都相同（见上面的测试）。
+- **披露：** 未主动启用的会话发布的内容与之前完全相同（没有
+  `hg`/`hn`/`sl`/`ss`），因此没有任何信息说明存在哪些账户；主动启用的
+  会话只发布其用户键入的标签，绝不发布账户名。任何会话都不读取另一个
+  账户的数据。
 
-The pins, pairing and admission code are unchanged and stay covered by the
-existing pairing, trust and revocation suites (revoked trust, conflicting
-pins).
+固定项、配对和准入代码未改变，并继续由现有的配对、信任和撤销测试套件
+覆盖（已撤销的信任、冲突的固定项）。
 
-## Physical checklist (two accounts on one Mac, both with this build)
+## 物理清单（一台 Mac 上两个账户，均使用此构建）
 
-Use accounts **Alex** (administrator) and **Mom** (standard), Fast User
-Switching on, one iPhone or iPad, and preferably a second Mac receiver.
+使用账户 **Alex**（管理员）和 **Mom**（标准），开启快速用户
+切换，一部 iPhone 或 iPad，最好还有第二台 Mac 接收端。
 
-1. **Default unchanged.** Neither account opts in. The iPhone lists the Mac as "Family MacBook" and "Family MacBook (2)", exactly as before this build.
-2. **Opt in.** Both accounts set a name and turn on List My Session Separately. The iPhone shows **Family MacBook** with **Alex** and **Mom** under it; the Mac receiver shows "Family MacBook — Alex" and "Family MacBook — Mom".
-3. **Pair each.** Pair the iPhone with Alex (code on Alex's screen), switch to Mom, pair with Mom (code on Mom's screen). Two paired Macs with distinct names; forgetting one leaves the other.
-4. **Switch out.** With Alex streaming and in control, switch to Mom. Within a second: the iPhone shows Control off; typing on it does nothing anywhere; Alex's row shows **Switched Out**; Mom's screen never receives a keystroke or click (try typing into TextEdit in Mom's session). Asking for control from the iPhone now is refused, even with Always Allow.
-5. **Held keys.** In Alex's session hold Shift (latched modifier on the iPhone) and a Command key mid-drag, switch to Mom: Mom's session has no stuck modifier or button (type and click in TextEdit). Switch back: nothing is held in Alex's session either, and control has to be asked for again. Repeat with a pencil drag on an iPad.
-6. **Extend leak check.** With Alex extending to an iPad, switch to Mom. Mom's System Settings → Displays must show **no** MeowDisplay display. If it does, record it: Extend would need tearing down on switch-out.
-7. **Ports.** Turn on Remote Access in both accounts: only the first holds TCP 9003 (`lsof -i :9003`); the other's knock fails closed. Pair over Remote in the second account reports "Couldn't start Pair over Remote".
-8. **Logout.** Log Mom out: Mom's row disappears, Alex's stays.
-9. **Standard account.** In Mom's (standard) account, grant Screen Recording and Accessibility; record whether macOS asks for administrator credentials. Check for updates: record whether Sparkle asks for an administrator, and whether Alex's running copy keeps working while the bundle is replaced.
-10. **Lock and sleep.** Lock Alex's session (no switch): existing lock-screen behaviour. Sleep the Mac and wake it: each session's devices reconnect to their own session only.
+1. **默认值不变。** 两个账户都不主动启用。iPhone 把 Mac 列为“Family MacBook”和“Family MacBook (2)”，与此构建之前完全相同。
+2. **主动启用。** 两个账户都设置名称并开启“单独列出我的会话”。iPhone 显示 **Family MacBook**，其下是 **Alex** 和 **Mom**；Mac 接收端显示“Family MacBook — Alex”和“Family MacBook — Mom”。
+3. **分别配对。** 把 iPhone 与 Alex 配对（验证码在 Alex 屏幕上），切换到 Mom，与 Mom 配对（验证码在 Mom 屏幕上）。两台已配对的 Mac 名称不同；忘记一台不会影响另一台。
+4. **切换出去。** Alex 正在串流并拥有控制时，切换到 Mom。一秒内：iPhone 显示控制已关闭；在上面输入在任何地方都没有效果；Alex 的行显示 **已切换用户**；Mom 的屏幕绝不会收到按键或点击（试着在 Mom 会话的 TextEdit 中输入）。此时从 iPhone 请求控制会被拒绝，即使有“始终允许”。
+5. **按住的按键。** 在 Alex 的会话中按住 Shift（iPhone 上锁定的修饰键）和一个正在拖动中的 Command 键，切换到 Mom：Mom 的会话没有卡住的修饰键或按钮（在 TextEdit 中输入和点击）。切换回来：Alex 的会话中也没有任何被按住的状态，并且必须重新请求控制。用 iPad 上的 Pencil 拖动重复一次。
+6. **扩展泄漏检查。** Alex 正在扩展到 iPad 时，切换到 Mom。Mom 的系统设置 → 显示器必须**不**显示任何 MeowDisplay 显示器。如果显示了，记录下来：扩展需要在切换出去时拆除。
+7. **端口。** 在两个账户中都开启远程访问：只有第一个持有 TCP 9003（`lsof -i :9003`）；另一个的敲门会安全失败。第二个账户中的远程配对报告“无法启动远程配对”。
+8. **注销。** 注销 Mom：Mom 的行消失，Alex 的保留。
+9. **标准账户。** 在 Mom 的（标准）账户中，授予屏幕录制和辅助功能；记录 macOS 是否要求管理员凭据。检查更新：记录 Sparkle 是否要求管理员，以及 Alex 正在运行的副本在 bundle 被替换时是否继续工作。
+10. **锁定与睡眠。** 锁定 Alex 的会话（不切换）：现有锁屏行为。让 Mac 睡眠再唤醒：每个会话的设备只重连到自己的会话。

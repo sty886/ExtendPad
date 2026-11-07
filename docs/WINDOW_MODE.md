@@ -1,130 +1,116 @@
-# Window mode
+# 窗口模式
 
-Besides **Mirror** (show a Mac display) and **Extend** (add a separate
-desktop), a device can choose **Windows** in the app to open **Window view**:
-the individual **Mac windows** you pick, arranged side by side on that
-device. The in-app label is **Windows**, but on the website and in public
-marketing we say **Mac windows** or **Window view** so it cannot be
-confused with the Windows operating system (a separate unplanned idea,
-[#84](https://github.com/raiseCatError/meowdisplay/issues/84)).
-Each receiver makes its own choice; another receiver's mode does not change.
+除了 **镜像**（显示 Mac 显示器）和 **扩展**（增加独立桌面），设备还可以
+在应用中选择 **窗口** 以打开 **窗口视图**：你挑选的各个 **Mac 窗口**
+并排排列在该设备上。应用内标签是 **窗口**，但在网站和公开宣传中我们称
+**Mac 窗口** 或 **窗口视图**，以免与 Windows 操作系统混淆（一个单独且
+未计划的构想，[#84](https://github.com/raiseCatError/meowdisplay/issues/84)）。
+每个接收端做自己的选择；另一台接收端的模式不会改变。
 
-- Every receiver, including compact Android phones: up to **9** panes.
-- Minimum pane size and the space available decide which arrangements fit.
-- One window is the default.
+- 每台接收端，包括紧凑型 Android 手机：最多 **9** 个窗格。
+- 最小窗格大小和可用空间决定哪些排列能放下。
+- 默认一个窗口。
 
-The limit follows the space the app actually has (split screen, a folded
-cover screen, Stage Manager), not the device model. When the space shrinks,
-extra windows move to **Hidden on this screen** in the window overview; none is
-removed, and the arrangement comes back when the space returns.
+该上限取决于应用实际拥有的空间（分屏、折叠后的外屏、台前调度），而不是
+设备型号。空间缩小时，多余的窗口会移到窗口概览中的 **在此屏幕上隐藏**；
+不会移除任何窗口，空间恢复后排列也会恢复。
 
-## Using it
+## 使用
 
-| | Android | Mac Receiver |
+| | Android | Mac 接收端 |
 | --- | --- | --- |
-| Open the window overview | Hold three fingers still, use the rail, or Settings → Display → Choose Windows… | Windows in the title bar, or ⌃⌥W |
-| Quick switch | Stage Peek: hold an edge, slide to browse, then tap a window. Full Desktop returns to the whole Mac screen. Rail is optional in Settings. | Overview |
-| Switch view | Stage Peek's Full Desktop card or the overview's Mirror/Extend | — |
-| Tile options | Tap a tile's name for typing, window choice, rotation, fit, layout and removal controls | Same, while Arrange is on |
-| Move a tile | Press and hold its name, then drag to swap or split | Same, while Arrange is on |
-| Tabs in a pane | Drag windows onto labels to add, move or reorder tabs | — |
-| Drag an app in | Drag an app from Stage Peek onto a pane | — |
-| Resize | Arrange Tiles, then drag the grips between tiles | Same |
+| 打开窗口概览 | 三指按住不动、使用轨道，或设置 → 显示 → 选择窗口… | 标题栏中的“窗口”，或 ⌃⌥W |
+| 快速切换 | 台前预览：按住边缘，滑动浏览，然后轻点一个窗口。完整桌面返回整个 Mac 屏幕。轨道在设置中可选。 | 概览 |
+| 切换视图 | 台前预览的完整桌面卡片，或概览的镜像/扩展 | — |
+| 磁贴选项 | 轻点磁贴名称，进入输入、窗口选择、旋转、适应、布局和移除控件 | 相同，在“排列”开启时 |
+| 移动磁贴 | 按住其名称，然后拖动以交换或拆分 | 相同，在“排列”开启时 |
+| 窗格中的标签页 | 把窗口拖到标签上以添加、移动或重排标签页 | — |
+| 拖入应用 | 从台前预览把一个应用拖到窗格上 | — |
+| 调整大小 | 排列磁贴，然后拖动磁贴之间的把手 | 相同 |
 
-Removing a tile never closes the Mac window. **Close Window on Mac…** is
-separate, asks first, and needs control of the Mac.
+移除磁贴绝不会关闭 Mac 窗口。**关闭 Mac 上的窗口…** 是独立的操作，
+会先询问，并且需要 Mac 的控制权。
 
-Each tile can be rotated on its own (0°, 90°, 180°, 270°). Only the picture
-turns; the Mac window doesn't, and clicks, drags, scrolling and Pencil land
-where you touch.
+每个磁贴可以独立旋转（0°、90°、180°、270°）。只有画面旋转；Mac 窗口
+不旋转，点击、拖动、滚动和 Pencil 都落在你触碰的位置。
 
-## Pointer and keyboard
+## 指针与键盘
 
-There is one pointer across all tiles. Moving it over another tile only
-highlights that tile; it never changes what you type into. Clicking a tile
-makes it the one you type into (its window comes to the front on the Mac) and
-that same click goes through. A drag stays in the window it started in, even
-if it crosses into another tile.
+所有磁贴共用一个指针。将指针移到另一个磁贴上只会高亮该磁贴；它绝不会
+改变你输入的目标。点击某个磁贴会使其成为输入目标（其窗口在 Mac 上置于
+最前），并且同一次点击会传递过去。拖动会停留在其起始窗口中，即使它跨入
+另一个磁贴。
 
-macOS has one keyboard focus. MeowDisplay sends keys only to the tile you
-selected, and only while that window's app really is in front on the Mac. If
-something else comes to the front, the tile shows **Typing paused** and
-nothing is typed until you tap to resume.
+macOS 只有一个键盘焦点。MeowDisplay 只向你选中的磁贴发送按键，而且仅当
+该窗口的应用确实在 Mac 上处于最前时。如果有其他东西来到最前，磁贴会显示
+**输入已暂停**，在你轻点恢复之前不会输入任何内容。
 
-Control still needs the Mac's permission for each session (Request Control). View
-Only sessions can arrange tiles and pick windows but send nothing to the Mac.
+控制仍需要 Mac 对每个会话的许可（请求控制）。仅查看会话可以排列磁贴和
+选择窗口，但不会向 Mac 发送任何内容。
 
-A press into a tile brings its window to the front first when another window
-covers it on the Mac, then lands in it. On Android, hardware keyboards can't
-send ⌘ shortcuts (Android keeps the Meta key's combinations for itself): use
-the on-screen ⌘ key, or turn on Settings → Input → **Control Key Types ⌘**.
+当另一个窗口在 Mac 上覆盖了某个磁贴的窗口时，按入磁贴会先把该窗口带到
+最前，然后落点进入其中。在 Android 上，硬件键盘无法发送 ⌘ 快捷键
+（Android 把 Meta 键的组合留给自己）：使用屏幕上的 ⌘ 键，或开启
+设置 → 输入 → **Control 键输入 ⌘**。
 
-## How it works (sender)
+## 工作原理（发送端）
 
-Measured on macOS 27 (integration evidence `W1-sck`): ScreenCaptureKit's
-`SCContentFilter(desktopIndependentWindow:)` captures a window's own content
-when it is covered, off-screen (including negative coordinates) or belongs to
-a hidden app on another Space. Minimized windows and hidden apps deliver no
-frames (stills fail with -3811) and resume on the same stream when restored.
+在 macOS 27 上测量（集成证据 `W1-sck`）：当窗口被遮挡、在屏幕外（包括
+负坐标）或属于另一个空间上的隐藏应用时，ScreenCaptureKit 的
+`SCContentFilter(desktopIndependentWindow:)` 能采集窗口自身的内容。
+最小化的窗口和隐藏的应用不提供帧（静态图失败并返回 -3811），恢复后会在
+同一流上继续。
 
-So Window mode creates **no virtual display** and never moves, resizes or
-re-Spaces a window:
+因此窗口模式**不创建虚拟显示器**，也从不移动、调整大小或重新分配窗口
+所在的空间：
 
-1. one ScreenCaptureKit stream per chosen window, scaled to its tile by the
-   window server, at full rate for the active tile and reduced rates for the
-   others (30 / 15 / 10 fps as tiles increase; 0 while minimized), at most 16
-   window streams on the Mac at once;
-2. a GPU compositor (Core Image on Metal) draws the tiles into one canvas the
-   size of the receiver's panel, with each tile's fit and rotation;
-3. the session's existing encoder sends it as before (H.264 or HEVC).
+1. 每个选中的窗口一条 ScreenCaptureKit 流，由窗口服务器缩放到其磁贴，
+   活动磁贴全帧率，其他磁贴降低帧率（随磁贴增加为 30 / 15 / 10 fps；
+   最小化时为 0），Mac 上同时最多 16 条窗口流；
+2. GPU 合成器（Metal 上的 Core Image）把各磁贴绘制成一块接收端面板大小
+   的画布，包含每个磁贴的适应方式和旋转；
+3. 会话现有的编码器像以前一样发送它（H.264 或 HEVC）。
 
-One encode per receiver keeps hardware encoders and the receivers' decoders
-within limits; nine windows never mean nine streams to decode on a phone.
-A tiny display stream keeps the Mac's audio and the usual capture lifecycle
-(pause, Video Off, recovery).
+每台接收端一次编码，使硬件编码器和接收端的解码器保持在限制内；九个窗口
+绝不意味着手机上要解码九条流。一条极小的显示流维持 Mac 的音频和通常的
+采集生命周期（暂停、关闭视频、恢复）。
 
-Windows are listed by identity and metadata, not by position: MeowDisplay's
-own windows, system UI, password prompts, the Stage Manager strip, every
-app's menu-bar backdrop and untitled off-screen helpers are left out; titled
-windows on other Spaces or minimized are kept. A window id is tied to its
-process for the session, so a reused id is a different window and a tile
-holding the old one is refused, never pointed at the new one.
+窗口按身份和元数据列出，而不是按位置：MeowDisplay 自己的窗口、系统 UI、
+密码提示、台前调度条、每个应用的菜单栏背景以及无标题的屏幕外辅助窗口
+都会被排除；其他空间上或最小化的有标题窗口会保留。窗口 id 在会话期间与
+其进程绑定，因此被复用的 id 是另一个窗口，持有旧窗口的磁贴会被拒绝，
+绝不会指向新窗口。
 
-## Limits
+## 限制
 
-- **Other macOS accounts.** Each account runs its own MeowDisplay (see
-  SAME_MAC_SESSIONS.md). A switched-out account has nothing on screen and
-  can't be captured, so windows from two accounts can't be shown at the same
-  time. Pairing with one account never gives access to another.
-- **Several Macs in one workspace.** The protocol carries the host on every
-  tile and each Mac handles only its own; receivers connect to one Mac at a
-  time today.
-- **Headless Macs.** Window mode needs windows on some display, even a virtual
-  one. With no display at all it says so and suggests Extend, which creates
-  one.
-- **Input over covered windows.** macOS delivers clicks to whatever is on top
-  at a point. MeowDisplay raises the target window first and sends nothing if
-  something still covers it there. Background-window hover isn't possible
-  without moving the Mac pointer, so hover reaches the Mac only over the
-  active tile.
-- **Zoom.** On Android, tile handles follow the unzoomed picture.
-- **Stage Manager.** Windows on the current stage stream live. A window in
-  the side strip doesn't: measured on macOS 27.0 (26A428) with a disposable
-  window drawing a frame counter, ScreenCaptureKit's per-window stream
-  suspends, its screenshot fails (-3811), and neither the legacy
-  CGWindowListCreateImage nor SkyLight's private CGSHWCaptureWindowList (with
-  or without the `fullSize` option) returns the real window — only the
-  tilted thumbnail, or nothing while the strip is hidden. The pane keeps its
-  last picture and says why; with control, **Show on Mac** brings that window
-  onto the stage, and **Turn Off Stage Manager** switches it off for Window
-  mode (back on afterwards). macOS applies Stage Manager only through its own
-  control, so that runs two shortcuts the owner makes once with the
-  "Set Stage Manager" action (Settings → System → Stage Manager); writing the
-  `GloballyEnabled` preference has no visible effect (measured). A window
-  that returns to the stage gets a fresh stream within about 2 s.
-  Evidence: the integration folder's RESEARCH-2026-10-30-stage-manager-capture-lab.md.
+- **其他 macOS 账户。** 每个账户运行自己的 MeowDisplay（见
+  SAME_MAC_SESSIONS.md）。被切换出去的账户屏幕上没有任何内容，无法
+  被采集，因此两个账户的窗口无法同时显示。与一个账户配对绝不会授予
+  访问另一个账户的权限。
+- **一个工作区中有多台 Mac。** 协议在每个磁贴上携带主机，每台 Mac 只
+  处理自己的窗口；接收端目前一次连接一台 Mac。
+- **无头 Mac。** 窗口模式需要窗口位于某个显示器上，即使是虚拟显示器。
+  完全没有显示器时，它会说明这一点并建议扩展，因为扩展会创建一块
+  显示器。
+- **覆盖窗口上的输入。** macOS 会把点击传递给某一点最上层的内容。
+  MeowDisplay 会先抬起目标窗口，如果那里仍有东西覆盖它，则不发送任何
+  内容。后台窗口悬停在不移动 Mac 指针的情况下不可能实现，因此悬停只在
+  活动磁贴上到达 Mac。
+- **缩放。** 在 Android 上，磁贴手柄跟随未缩放的画面。
+- **台前调度。** 当前舞台上的窗口会实时串流。侧边栏中的窗口不会：在
+  macOS 27.0（26A428）上，用一个绘制帧计数器的临时窗口测量时，
+  ScreenCaptureKit 的每窗口流会暂停，其截图失败（-3811），传统的
+  CGWindowListCreateImage 和 SkyLight 私有的 CGSHWCaptureWindowList
+  （无论是否使用 `fullSize` 选项）都不返回真实窗口——只有倾斜的缩略图，
+  或者在侧边栏隐藏时什么都没有。窗格保留最后一幅画面并说明原因；拥有
+  控制权时，**在 Mac 上显示** 会把该窗口带到舞台上，**关闭台前调度**
+  会为窗口模式关闭它（之后重新开启）。macOS 只通过自己的控件应用台前
+  调度，因此这会运行所有者用“设置台前调度”操作一次性创建的两个快捷
+  指令（设置 → 系统 → 台前调度）；写入 `GloballyEnabled` 偏好设置没有
+  可见效果（已测量）。返回到舞台的窗口会在大约 2 秒内获得新的流。
+  证据：集成文件夹中的 RESEARCH-2026-10-30-stage-manager-capture-lab.md。
 
-## Turning it off
+## 关闭窗口模式
 
-Mac: Settings → Displays → Windows → **Let devices show individual windows**.
-Off, the Mac doesn't offer Window mode and ignores window messages.
+Mac：设置 → 显示器 → 窗口 → **允许设备显示单个窗口**。关闭后，Mac
+不提供窗口模式，并忽略窗口消息。
