@@ -10,6 +10,8 @@ Mirror or extend the desktop, arrange individual Mac windows, and control the
 Mac with touch, trackpad, mouse and keyboard input. Connections use local
 Wi-Fi, an authorized Android USB tunnel, or a private network you control.
 
+**English** · [简体中文](README.zh-CN.md)
+
 [Setup](docs/SETUP.md) · [Architecture](docs/ARCHITECTURE.md) ·
 [Security](SECURITY.md) · [Support](SUPPORT.md)
 
