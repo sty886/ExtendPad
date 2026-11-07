@@ -65,7 +65,7 @@ jobs:
               or (path.startswith("docs/") and path.endswith(".md"))
               for path in paths
           )
-          # MacTests/AppStoreTests scans the top-level docs for the upstream
+          # tests/macos/AppStoreTests scans the project docs for the upstream
           # listing ID (built from a number there too, so this file never holds
           # the literal): a doc that contains it must get the Mac job.
           upstream_id = str(6_780_264_891)
@@ -112,19 +112,19 @@ jobs:
         with:
           persist-credentials: false
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
-        if: hashFiles('AndroidReceiver/settings.gradle.kts') != ''
+        if: hashFiles('apps/android/settings.gradle.kts') != ''
         with:
           distribution: temurin
           java-version: '17'
           cache: gradle
       - name: Tests, lint and an unsigned release bundle
-        if: hashFiles('AndroidReceiver/settings.gradle.kts') != ''
-        working-directory: AndroidReceiver
+        if: hashFiles('apps/android/settings.gradle.kts') != ''
+        working-directory: apps/android
         run: ./gradlew --no-daemon :core:test :app:testDebugUnitTest :app:lintRelease :app:bundleRelease
       # The counts, so a review can see the suites really ran (Gradle prints none by itself).
       - name: Test counts
-        if: always() && hashFiles('AndroidReceiver/settings.gradle.kts') != ''
-        working-directory: AndroidReceiver
+        if: always() && hashFiles('apps/android/settings.gradle.kts') != ''
+        working-directory: apps/android
         run: |
           ruby -rrexml/document -e '
             totals = Hash.new { |h, k| h[k] = [0, 0, 0, 0] }
@@ -172,7 +172,7 @@ jobs:
         run: |
           # Per-test time limits: a test that hangs fails by name instead of stalling the job.
           xcodebuild test \
-            -project MeowDisplay.xcodeproj \
+            -project ExtendPad.xcodeproj \
             -scheme OpenSidecarMac \
             -destination 'platform=macOS' \
             -test-timeouts-enabled YES \
@@ -184,92 +184,13 @@ jobs:
 
       # The receiver app has a much lower deployment target than the sender
       # (issue #241); building it is what catches an API that only exists on
-      # newer macOS sneaking into Shared/ or the receiver.
+      # newer macOS sneaking into packages/shared/ or the receiver.
       - name: Build macOS receiver app
         run: |
           xcodebuild build \
-            -project MeowDisplay.xcodeproj \
+            -project ExtendPad.xcodeproj \
             -scheme OpenSidecarMacReceiver \
             -destination 'platform=macOS' \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY=""
-
-      # The iPhone/iPad receiver shares Shared/ with both Mac apps but was
-      # never compiled here, so an iOS-only break (or an API that exists only
-      # on macOS) could reach main unnoticed. A generic-device build needs no
-      # simulator runtime and no signing.
-      - name: Build iOS receiver app
-        run: |
-          xcodebuild build \
-            -project MeowDisplay.xcodeproj \
-            -scheme OpenSidecariOS \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath "$RUNNER_TEMP/ios-receiver" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY=""
-
-      # `GeometryProxy.reservedRegions` (iPhone Duo fold/camera geometry)
-      # exists only in the iOS 27.1+ SDK, so the receiver compiles it in
-      # behind a compile-time gate. Prove which side of that gate this
-      # toolchain took: the built app must reference the symbol exactly when
-      # the SDK declares it — excluded on older SDKs, enabled on 27.1+.
-      - name: Check reserved-region SDK gate
-        run: |
-          xcodebuild -version
-          xcrun swiftc --version
-          sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
-          app="$RUNNER_TEMP/ios-receiver/Build/Products/Debug-iphoneos/OpenSidecariOS.app"
-          interfaces=("$sdk"/System/Library/Frameworks/SwiftUICore.framework/Modules/SwiftUICore.swiftmodule/*.swiftinterface)
-          # A wrong path must fail here, never pass as "not referenced".
-          test -d "$app"
-          test -f "${interfaces[0]}"
-          if grep -q 'func reservedRegions(' "${interfaces[@]}"; then
-            declared=yes
-          else
-            declared=no
-          fi
-          if find "$app" -maxdepth 1 -type f \( -perm -u+x -o -name '*.dylib' \) -exec xcrun nm -u {} + 2>/dev/null \
-              | grep -q 'GeometryProxyV15reservedRegions'; then
-            referenced=yes
-          else
-            referenced=no
-          fi
-          echo "iOS SDK $(xcrun --sdk iphoneos --show-sdk-version): reservedRegions declared=$declared referenced=$referenced"
-          test "$declared" = "$referenced"
-
-  # iPhone Duo: the receiver's UI tests on the Duo simulator, so adaptive layouts (the
-  # window-sized Extend panel, size-class controls, safe areas) run on the form factor they
-  # were made for. Not a required check yet: the first runs establish it.
-  ios-duo:
-    needs: changes
-    if: ${{ !cancelled() && (needs.changes.result != 'success' || (needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.workflow_only != 'true')) }}
-    runs-on: xcode-27
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-      - name: Select Xcode (.xcode-version)
-        run: scripts/ci/select-xcode.sh
-      - name: Install XcodeGen
-        run: brew install xcodegen
-      - name: Generate project
-        run: xcodegen generate
-      - name: Boot an iPhone Duo simulator
-        id: duo
-        run: echo "udid=$(scripts/ci/duo-simulator.sh)" >> "$GITHUB_OUTPUT"
-      - name: UI tests on iPhone Duo
-        run: |
-          xcodebuild test \
-            -project MeowDisplay.xcodeproj \
-            -scheme OpenSidecariOS \
-            -destination "id=${{ steps.duo.outputs.udid }}" \
-            -derivedDataPath "$RUNNER_TEMP/ios-duo" \
-            -only-testing:OpenSidecariOSUITests/DemoModeSmokeTests \
-            -only-testing:OpenSidecariOSUITests/AdaptiveLayoutTests \
-            -test-timeouts-enabled YES \
-            -default-test-execution-time-allowance 300 \
-            CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY=""

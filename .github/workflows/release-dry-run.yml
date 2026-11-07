@@ -183,42 +183,6 @@ jobs:
           INSTALLATION_SCOPE_TOKEN: ${{ steps.scope-token.outputs.token }}
         run: scripts/release/check-release-state-access.sh
 
-  ios-upload:
-    needs: guard
-    runs-on: ubuntu-latest
-    environment: ios-upload
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-      - name: Environment is protected
-        id: protected
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: scripts/release/check-environment.sh ios-upload
-      - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1
-        with:
-          ruby-version: '3.3'
-      - name: Missing secrets, then App Store Connect access (read-only)
-        env:
-          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
-          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
-          MATCH_DEPLOY_KEY: ${{ secrets.MATCH_DEPLOY_KEY }}
-          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          APP_STORE_CONNECT_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_KEY_CONTENT }}
-        run: |
-          set -euo pipefail
-          scripts/release/report-missing.sh --fail DEVELOPMENT_TEAM MATCH_GIT_URL MATCH_DEPLOY_KEY MATCH_PASSWORD \
-            APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_CONTENT
-          app=$(jq -r .ios.appId .github/release-config.json)
-          ruby -Iscripts/release/lib -rmeow_release -e '
-            latest = MeowRelease::AppStoreConnect.from_env(app_id: ARGV[0]).latest_build_number(ARGV[1])
-            puts "App Store Connect reachable; latest build of #{ARGV[1]}: #{latest || "none"}"' "$app" "${GITHUB_REF#refs/heads/release/}"
-
   android-upload:
     needs: guard
     runs-on: ubuntu-latest

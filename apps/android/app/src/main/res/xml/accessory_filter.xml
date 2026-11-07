@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Must match the manufacturer/model/version the Mac sends with AOA
+     ACCESSORY_SEND_STRING before ACCESSORY_START. -->
+<resources>
+    <usb-accessory
+        manufacturer="ExtendPad"
+        model="ExtendPad"
+        version="1" />
+</resources>

@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible problem with the Mac, iPhone/iPad, Android or Mac Receiver app.
+description: Report a reproducible problem with the Mac, Android or Mac Receiver app.
 title: "[Bug]: "
 labels: ["bug"]
 body:
@@ -26,7 +26,6 @@ body:
       label: Affected app
       options:
         - Mac app (sender)
-        - iPhone / iPad receiver
         - Android receiver
         - Mac Receiver
         - More than one / unsure

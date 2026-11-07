@@ -3,15 +3,12 @@ import { AnimatePresence, motion } from "motion/react"
 import TextRotate from "./components/TextRotate"
 
 const HERO_WORDS = [
-  "partner's iPad",
+  "Android tablet",
   "5K iMac",
   "spare MacBook",
-  "iPhone",
-  "girlfriend's iPad",
-  "mother's iPad",
-  "kid's iPad",
-  "dusty iPad",
-  "iPad",
+  "Android phone",
+  "foldable",
+  "Android",
 ]
 
 export default function App() {
@@ -159,13 +156,13 @@ export default function App() {
           </h1>
           <p className="tagline">
             A free, open-source alternative to Apple Sidecar, Duet Display and Luna Display.
-            Use your iPhone and iPad as a second — and even a third — screen for your Mac,
-            with real touch, mouse and keyboard input routed back, locally over USB/WiFi or
+            Use an Android device or another Mac as a second screen for your Mac,
+            with touch, mouse and keyboard input routed back, locally over USB/WiFi or
             remotely through a private network like Tailscale. No subscription. No dongle.
             No MeowDisplay-hosted account or relay.
           </p>
-          <p className="meta">macOS 14+ &nbsp;·&nbsp; iPadOS 16+ &nbsp;·&nbsp; iOS 16+ &nbsp;·&nbsp; Receiver Mac 12+ &nbsp;·&nbsp; GPL-3.0</p>
-          <p className="meta">Primary tested configuration: <strong>Mac host → iPhone receiver.</strong> Other combinations may already work but aren't as thoroughly validated yet.</p>
+          <p className="meta">macOS 14+ &nbsp;·&nbsp; Android 10+ &nbsp;·&nbsp; Receiver Mac 12+ &nbsp;·&nbsp; GPL-3.0</p>
+          <p className="meta">Supported receivers: <strong>Android and Mac.</strong></p>
         </div>
       </section>
 
@@ -196,11 +193,9 @@ export default function App() {
             <p className="download-group-intro">Install one on the device you want to use as your extra display.</p>
             <div className="download-options receiver-downloads">
               <div className="download-option">
-                <div className="platform">
-                  <span className="platform-name">iOS</span><span className="platform-separator">&amp;</span><span className="platform-name">iPadOS</span>
-                </div>
-                <p className="dl-sub">The receiver app for your iPhone and iPad. Build and install through Xcode today — a TestFlight beta is planned, with the App Store to follow.</p>
-                <a className="btn primary" href="https://github.com/raiseCatError/MeowDisplay#getting-started">
+                <div className="platform">Android</div>
+                <p className="dl-sub">The receiver app for Android phones, tablets and foldables running Android 10 or later.</p>
+                <a className="btn primary" href="https://github.com/raiseCatError/MeowDisplay/tree/main/apps/android">
                   Build from Source
                 </a>
               </div>
@@ -219,7 +214,7 @@ export default function App() {
 
           <p className="note" style={{ marginTop: "16px" }}>
             Setup, signing, permissions, and pairing: see the{" "}
-            <a href="https://github.com/raiseCatError/MeowDisplay/blob/main/SETUP.md">Setup Guide ↗</a>.
+            <a href="https://github.com/raiseCatError/MeowDisplay/blob/main/docs/SETUP.md">Setup Guide ↗</a>.
             Want to see what's coming? Check the{" "}
             <a href="https://github.com/raiseCatError/MeowDisplay#roadmap">Roadmap ↗</a>.
           </p>
@@ -236,12 +231,12 @@ export default function App() {
           <p className="eyebrow">Features</p>
           <h2>A true extended display, the way it should be.</h2>
           <div className="fgrid">
-            <div className="fcell"><span className="n">001</span><h3>No account, ever</h3><p>No sign-up, no email, no login. And unlike Apple Sidecar — which only works between devices on the <em>same</em> Apple ID — MeowDisplay pairs across different Apple IDs, so you can use a partner's or friend's iPad. Download both apps and go.</p></div>
+            <div className="fcell"><span className="n">001</span><h3>No account, ever</h3><p>No sign-up, no email, no login. Pair your own Android devices and Macs directly, without a hosted account.</p></div>
             <div className="fcell"><span className="n">002</span><h3>Low-latency pipeline</h3><p>Up to 60 FPS over USB. Hardware H.264 (VideoToolbox real-time mode), TCP_NODELAY, and frame-dropping backpressure with instant keyframe recovery keep it responsive.</p></div>
-            <div className="fcell"><span className="n">003</span><h3>Two, even three screens</h3><p>You're not limited to one device. Run several iPads and iPhones at once, each as its own extended display — up to three has been tested, and you can freely mix iPads and iPhones. Arrange them all in System Settings like real monitors.</p></div>
+            <div className="fcell"><span className="n">003</span><h3>More than one receiver</h3><p>Connect Android devices and Macs, each with its own display mode. Arrange them in System Settings like real monitors.</p></div>
             <div className="fcell"><span className="n">004</span><h3>Retina sharp</h3><p>Native Retina resolution — the virtual display matches your device panel pixel-for-pixel at HiDPI (@2x), so text looks exactly like it should.</p></div>
-            <div className="fcell"><span className="n">005</span><h3>USB-wired, lowest latency</h3><p>Streams over your charging cable via usbmux. No network, no jitter — and your phone charges while it works.</p></div>
-            <div className="fcell"><span className="n">006</span><h3>WiFi, zero config</h3><p>The phone advertises itself with Bonjour; pick it from a dropdown. No IP addresses to type.</p></div>
+            <div className="fcell"><span className="n">005</span><h3>USB-wired, lowest latency</h3><p>Android uses an authorized ADB tunnel over a data cable, with the same authenticated and encrypted session.</p></div>
+            <div className="fcell"><span className="n">006</span><h3>WiFi, zero config</h3><p>Receivers advertise themselves with Bonjour; pick one from the device list. No IP addresses to type.</p></div>
             <div className="fcell"><span className="n">007</span><h3>Touch &amp; scroll</h3><p>Tap to click, drag to drag, two-finger pan to scroll. A tiny touchscreen for your Mac.</p></div>
             <div className="fcell"><span className="n">008</span><h3>Portrait mode</h3><p>Rotate the phone and the virtual display rebuilds as a vertical monitor — perfect for chat, logs, or docs.</p></div>
             <div className="fcell"><span className="n">009</span><h3>Private by design</h3><p>One direct TCP connection between your devices. No servers, no accounts, no telemetry. Read the code.</p></div>
@@ -283,7 +278,7 @@ export default function App() {
               </thead>
               <tbody>
                 <tr><td>Price</td><td className="mark-yes os">Free &amp; open source</td><td>Free</td><td className="mark-no">Subscription</td><td className="mark-no">$$$ + dongle</td></tr>
-                <tr><td>iPhone as display</td><td className="mark-yes os">✓</td><td className="mark-no">✕</td><td className="mark-yes">✓</td><td className="mark-yes">✓</td></tr>
+                <tr><td>Android as display</td><td className="mark-yes os">✓</td><td className="mark-no">✕</td><td className="mark-yes">✓</td><td className="mark-yes">✓</td></tr>
                 <tr><td>Mac as display</td><td className="mark-yes os">✓</td><td className="mark-no">✕</td><td className="mark-yes">✓</td><td className="mark-yes">✓</td></tr>
                 <tr><td>Different Apple IDs</td><td className="mark-yes os">✓</td><td className="mark-no">✕</td><td className="mark-yes">✓</td><td className="mark-yes">✓</td></tr>
                 <tr><td>No account / sign-up</td><td className="mark-yes os">✓</td><td>Apple&nbsp;ID</td><td className="mark-no">✕</td><td>—</td></tr>
@@ -304,20 +299,9 @@ export default function App() {
               <summary>How does it actually work?</summary>
               <p>The Mac creates a virtual display with the private <code>CGVirtualDisplay</code> API
               (the same technique used by BetterDisplay and DeskPad), captures it with ScreenCaptureKit,
-              hardware-encodes H.264 with VideoToolbox, and streams it over a single TCP connection —
-              through the USB cable via usbmux, or over WiFi. The phone decodes and renders with
-              <code>AVSampleBufferDisplayLayer</code> and sends touch coordinates back, which the Mac
-              injects as mouse events.</p>
-            </details>
-            <details>
-              <summary>Is this on the App Store?</summary>
-              <p>Not yet. The iPhone &amp; iPad receiver is planned for TestFlight and later the App
-              Store, after broader validation. The Mac app is planned to ship as a signed, notarized
-              direct download rather than through the Mac App Store, because it relies on{" "}
-              <code>CGVirtualDisplay</code>, a private API — that's the deal for every virtual-display
-              product: use it or ship a dongle. You can build either app from source today with your
-              own (free) Apple developer account in a few minutes — see the{" "}
-              <a href="https://github.com/raiseCatError/MeowDisplay/blob/main/SETUP.md">Setup Guide</a>.</p>
+              hardware-encodes H.264 with VideoToolbox, and streams it over a secured connection —
+              through an authorized Android ADB tunnel, or over WiFi. The Android or Mac receiver
+              decodes and renders the picture and sends input back to the Mac.</p>
             </details>
             <details>
               <summary>Why do I see the purple screen-recording indicator on my Mac?</summary>
@@ -326,19 +310,10 @@ export default function App() {
               the OS. It's a feature, not a bug: you always know a capture is running.</p>
             </details>
             <details>
-              <summary>WiFi mode can't find my iPhone — why?</summary>
-              <p>WiFi discovery needs the <strong>Local Network</strong> permission on <em>both</em>
-              sides, and macOS/iOS deny it silently if the prompt was missed: check System Settings →
-              Privacy &amp; Security → Local Network on the Mac, and Settings → Privacy &amp; Security →
-              Local Network on the iPhone. Both devices must be on the same WiFi and the iPhone app
-              must be open. The Mac app shows a live permission panel, and the iPhone app has a settings
-              screen (shake the phone) that links straight there. USB mode needs none of this.</p>
-            </details>
-            <details>
-              <summary>iPad support?</summary>
-              <p>The receiver is a universal iOS app — it runs on iPad today. Run the Mac, an iPhone
-              <em>and</em> an iPad at once for a second and a third screen. iPad-specific features
-              (Apple Pencil, pressure) are on the roadmap.</p>
+              <summary>WiFi mode can't find my Android device — why?</summary>
+              <p>Both devices must be on the same WiFi, and the ExtendPad receiver must be open.
+              Check macOS Local Network permission and the local firewall on the Mac. For a cable,
+              enable USB debugging and authorize the Mac before using the ADB tunnel.</p>
             </details>
             <details>
               <summary>Can I use it away from home, not just on the same WiFi?</summary>
@@ -353,7 +328,7 @@ export default function App() {
             </details>
             <details>
               <summary>Can another Mac be the display?</summary>
-              <p>Yes, where implemented — it needs broader validation than the primary Mac→iPhone setup.
+              <p>Yes. Mac-to-Mac receiving is implemented, with physical two-Mac verification still limited.
               Install <em>MeowDisplay Receiver</em>, a separate small app built from the same source tree, on
               the spare Mac. It needs only macOS 12 Monterey or newer (the sending Mac needs 14), so Macs
               from around 2015 onward qualify. It appears on the sending Mac like a phone would and
@@ -385,17 +360,13 @@ export default function App() {
         </div>
       </section>
 
-      {/* Community clients for hardware the official apps don't cover. Keep in
-          sync with the "Compatible apps" section in the README. */}
       <section id="compatible">
         <div className="wrap sec">
           <p className="eyebrow">Compatible apps</p>
-          <h2>Android, older iPads, Linux.</h2>
+          <h2>More Android clients.</h2>
           <p className="compat-lead">
-            The official apps are a Mac sender and an iPhone or iPad receiver. Other people have
-            built their own clients that speak the same protocol, so you can also use an Android
-            device or an older iPad as a display, or drive one from Linux. If your hardware isn't
-            covered yet, start here.
+            ExtendPad includes a native Android receiver. These community projects implement the
+            related OpenDisplay protocol and may suit other Android setups.
           </p>
           <div className="compat">
             <a className="compat-item" href="https://github.com/gprot42/android-opendisplay">
@@ -408,26 +379,10 @@ export default function App() {
               <span className="compat-repo">josepacelli/opendisplay-android ↗</span>
               <p>Android receiver that works with an unmodified Mac app. Android 8.0+.</p>
             </a>
-            <a
-              className="compat-item"
-              href="https://github.com/cuongpham1/ipad-iphone-second-monitor-ios12-free"
-            >
-              <span className="compat-role">iOS 12 receiver</span>
-              <span className="compat-repo">cuongpham1/ipad-iphone-second-monitor-ios12-free ↗</span>
-              <p>For iPads and iPhones too old to run the official receiver.</p>
-            </a>
-            <a className="compat-item" href="https://github.com/tixwho/opendisplay-linux">
-              <span className="compat-role">Linux sender</span>
-              <span className="compat-repo">tixwho/opendisplay-linux ↗</span>
-              <p>Drive an iPhone or iPad from a Wayland desktop (KDE Plasma, Hyprland).</p>
-            </a>
           </div>
           <p className="compat-note">
-            These are fan-made projects built for the same open protocol, not official builds. They
-            aren't affiliated with MeowDisplay (or the upstream OpenDisplay project) and aren't
-            maintained, reviewed or supported by us, so please report issues with them in their own
-            repositories. Listing them here also says nothing about our own plans: an official
-            MeowDisplay app may still ship for any of these platforms later.
+            These are community projects, not ExtendPad builds. They are maintained and supported
+            in their own repositories.
           </p>
         </div>
       </section>
@@ -438,7 +393,7 @@ export default function App() {
           <h2>Open source, and built in the open.</h2>
           <p style={{ color: "var(--muted)", maxWidth: "72ch", marginTop: "8px" }}>
             MeowDisplay is GPL-3.0 and developed entirely on GitHub — the whole stack, from Mac
-            capture and H.264 encoding to the iOS receiver, is yours to read, build, and improve.
+            capture and encoding to the Android and Mac receivers, is yours to read, build, and improve.
             Bug reports, feature ideas, and pull requests are all welcome. Build-and-run instructions
             live in the README.
           </p>
@@ -464,7 +419,7 @@ export default function App() {
             <a href="privacy.html">Privacy</a>
             <a href="https://github.com/raiseCatError/MeowDisplay/blob/main/LICENSE">GPL-3.0 License</a>
           </div>
-          <p className="fine">MeowDisplay — use your iPhone or iPad as a second monitor for your Mac. Free forever.</p>
+          <p className="fine">MeowDisplay — use Android or another Mac as a second monitor for your Mac. Free forever.</p>
         </div>
       </footer>
     </>

@@ -22,7 +22,7 @@
 #  Release pipeline
 #   - release-candidate.yml: push to release/** only, first step rejects any
 #     other ref, records the candidate before building, never publishes;
-#   - platform workflows (release-mac/ios/android.yml): workflow_call only,
+#   - platform workflows (release-mac/android.yml): workflow_call only,
 #     never publish, never submit or release in a store; Mac checks the
 #     Sparkle key and build-number ordering before signing, and keeps the
 #     staged DMGs and feeds 30 days;
@@ -105,7 +105,7 @@ STORE_ACTIONS = /\bpublish (stores|start)\b|submit_for_review|upload_to_app_stor
 REPO_ADMIN = %r{gh api[^\n]*-X\s*(PUT|PATCH|POST|DELETE)[^\n]*(rulesets|environments|secrets|default_branch)|gh (secret|variable) set|gh repo edit|default[_-]branch\s*=}i.freeze
 REFERENCE_MERGE = %r{(git (merge|cherry-pick|rebase)[^\n]*reference)|(gh pr (create|merge)[^\n]*reference/opendisplay)}.freeze
 
-RELEASE_WORKFLOWS = %w[release-candidate.yml release-mac.yml release-ios.yml release-android.yml release-publish.yml
+RELEASE_WORKFLOWS = %w[release-candidate.yml release-mac.yml release-android.yml release-publish.yml
                        release-pr.yml release-dry-run.yml release-monitor.yml release-state-access.yml].freeze
 SCHEDULE_SWITCHES = { "release-monitor.yml" => "RELEASE_AUTOMATION", "reference-sync.yml" => "REFERENCE_SYNC",
                       "repository-guard.yml" => "REPOSITORY_GUARD" }.freeze
@@ -212,7 +212,7 @@ if (doc = load("release-candidate.yml"))
     err(name, "plan must record the candidate SHA before anything builds") unless text.include?('candidate STATE --sha "$GITHUB_SHA"')
     err(name, "plan must refuse a version whose tag exists") unless text.include?("refs/tags/v$version")
   end
-  %w[mac ios android].each do |p|
+  %w[mac android].each do |p|
     job = doc["jobs"][p]
     err(name, "job #{p} must call release-#{p}.yml after plan") unless job && job["uses"] == "./.github/workflows/release-#{p}.yml" && needs(job).include?("plan")
   end
@@ -220,7 +220,7 @@ if (doc = load("release-candidate.yml"))
   no_publishing(name, doc)
 end
 
-{ "release-mac.yml" => %w[release-build release-state], "release-ios.yml" => %w[ios-upload release-state],
+{ "release-mac.yml" => %w[release-build release-state],
   "release-android.yml" => %w[android-upload release-state] }.each do |name, envs|
   next unless (doc = load(name))
 
@@ -361,7 +361,7 @@ if (doc = load("release-dry-run.yml"))
   name = "release-dry-run.yml"
   common(name, doc)
   only_trigger(name, doc, "workflow_dispatch")
-  secrets_behind_environments(name, doc, %w[release-build release-pr ios-upload android-upload release-stores website-update
+  secrets_behind_environments(name, doc, %w[release-build release-pr android-upload release-stores website-update
                                               release-state])
   no_publishing(name, doc)
   rs = doc.dig("jobs", "release-state")

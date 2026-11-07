@@ -5,12 +5,12 @@
 To report privately: open the [MeowDisplay GitHub repository](https://github.com/raiseCatError/meowdisplay) → **Security** → **Report a vulnerability**. Don't include secrets, keys or personal data in public places — the private report is visible only to maintainers. See [Reporting a vulnerability](#reporting-a-vulnerability) below.
 
 How MeowDisplay actually secures a connection, and what it stores. This
-describes the current implementation (`Shared/TLSConfigurator.swift`,
-`Shared/TrustStore.swift`, `Shared/Pairing.swift`,
-`Shared/PairingSession.swift`) — see [PROTOCOL.md](PROTOCOL.md) for the wire
+describes the current implementation (`packages/shared/TLSConfigurator.swift`,
+`packages/shared/TrustStore.swift`, `packages/shared/Pairing.swift`,
+`packages/shared/PairingSession.swift`) — see [PROTOCOL.md](docs/PROTOCOL.md) for the wire
 handshake and the README's
 [Security](README.md#security) section for a shorter version, and
-[ARCHITECTURE.md](ARCHITECTURE.md) for where these pieces sit in the app.
+[ARCHITECTURE.md](docs/ARCHITECTURE.md) for where these pieces sit in the app.
 
 ## Transport encryption
 
@@ -75,7 +75,7 @@ confirm it matches on both ends before the pairing is accepted. This is what
 binds a specific device's public key to your trust store — an attacker
 who can intercept traffic but doesn't also control what you see on both
 screens cannot pass this check unnoticed. See
-[PROTOCOL.md](PROTOCOL.md) for the exact handshake this derives from.
+[PROTOCOL.md](docs/PROTOCOL.md) for the exact handshake this derives from.
 
 ## What's stored, and where
 
@@ -84,7 +84,7 @@ screens cannot pass this check unnoticed. See
   the data-protection keychain under a `WireCrypto.*` namespace
   (`TrustStore.swift`). This is local, per-device storage — not synced to
   iCloud or any MeowDisplay-hosted service.
-- Forgetting a device (see [SETUP.md](SETUP.md#forgetting-and-re-pairing-a-device))
+- Forgetting a device (see [SETUP.md](docs/SETUP.md#forgetting-and-re-pairing-a-device))
   removes its pin from the Keychain; the next connection attempt requires
   pairing again.
 - No account, email, or personal identifier is required or collected to use
@@ -101,7 +101,7 @@ other end. It does not by itself admit a session:
   exact connection, and a receiver-initiated request that needs the Mac
   owner's approval must have it. After a reconnect or a route change the new
   connection is admitted again before anything flows
-  (`Mac/SenderSessionAuthorization.swift`).
+  (`apps/macos/SenderSessionAuthorization.swift`).
 - **Every connection re-proves identity, on every route.** The receiver's
   announced ID must be the device the Mac dialed, and its key must be that
   device's *current* pin — USB is held to exactly the same rule as the
@@ -155,8 +155,8 @@ on in the device's own Settings ▸ Clipboard. Details: PROTOCOL.md 6.15.
   recognized**. Turn the clipboard on only for devices and Macs you trust, and
   pause it when copying secrets.
 - **Operating-system limits are respected, not bypassed.** macOS 15.4 and
-  later may ask before MeowDisplay reads the pasteboard. iOS and Android let
-  an app read the clipboard only while it is in front (iOS may ask each time;
+  later may ask before MeowDisplay reads the pasteboard. Android lets
+  an app read the clipboard only while it is in front (
   Android shows a notice), so copies made on a device reach the Mac when you
   return to MeowDisplay, not in the background. Writes stay on the device
   (not passed on to Universal Clipboard). No private APIs or background
@@ -214,8 +214,7 @@ on in the device's own Settings ▸ Clipboard. Details: PROTOCOL.md 6.15.
   checks (Sparkle asks), or when the user chooses **Check for Updates…**.
   No system profile is sent. Both the feed and the downloaded update must
   carry a valid signature from MeowDisplay's EdDSA key, and macOS code
-  signing still applies to the updated app. The iOS app makes no
-  update-check request.
+  signing still applies to the updated app.
 
 ## Privacy Shield
 
@@ -290,8 +289,8 @@ requests or elsewhere before a fix is available.
 Helpful details to include:
 
 - Affected MeowDisplay version or commit
-- Affected platform(s): Mac model and macOS version, and/or iPhone/iPad model
-  and iOS/iPadOS version
+- Affected platform(s): Mac model and macOS version, and/or Android device
+  model and Android version
 - A description of the vulnerability
 - Steps to reproduce, or a proof of concept where it is safe to share
 - The impact you believe it has, and whether exploiting it needs an

@@ -27,7 +27,7 @@ code=$("$root/scripts/release/meow-release" next-build android --version "$versi
 password=$(security find-generic-password -a meowdisplay-upload -s "MeowDisplay Android upload key" -w)
 
 (
-  cd "$root/AndroidReceiver"
+  cd "$root/apps/android"
   MEOW_UPLOAD_STORE_FILE="$store" MEOW_UPLOAD_STORE_PASSWORD="$password" \
   MEOW_UPLOAD_KEY_ALIAS=upload MEOW_UPLOAD_KEY_PASSWORD="$password" \
     ./gradlew --no-daemon --no-configuration-cache -q :app:bundleRelease \
@@ -35,7 +35,7 @@ password=$(security find-generic-password -a meowdisplay-upload -s "MeowDisplay 
 )
 unset password
 
-aab="$root/AndroidReceiver/app/build/outputs/bundle/release/app-release.aab"
+aab="$root/apps/android/app/build/outputs/bundle/release/app-release.aab"
 # Not -strict: the upload certificate is self-signed, which -strict rejects.
 verified=$(jarsigner -verify "$aab")
 grep -q '^jar verified\.' <<< "$verified" || { echo "error: bundle signature does not verify" >&2; exit 1; }
@@ -46,7 +46,7 @@ signer=$(keytool -printcert -jarfile "$aab" | awk '/SHA256:/ {print $2; exit}' |
 mkdir -p "$out"
 name="MeowDisplay-$version-$code"
 cp "$aab" "$out/$name.aab"
-cp "$root/AndroidReceiver/app/build/outputs/mapping/release/mapping.txt" "$out/$name-mapping.txt"
+cp "$root/apps/android/app/build/outputs/mapping/release/mapping.txt" "$out/$name-mapping.txt"
 (cd "$out" && shasum -a 256 "$name.aab" "$name-mapping.txt" > "$name-SHA256SUMS.txt")
 echo "versionCode $code"
 cat "$out/$name-SHA256SUMS.txt"

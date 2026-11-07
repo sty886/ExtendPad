@@ -3,25 +3,25 @@
 Thanks for helping make MeowDisplay better. Bug reports, carefully described ideas, documentation, physical-device testing, translations, and focused code changes are welcome. You do not need to write code to contribute.
 
 The current platform versions and download channels are in
-[README.md](README.md#platform-availability--november-2-2026): Mac and
-iPhone/iPad 2.0 are stable releases, and Android 2.0 is in closed testing.
+[README.md](README.md): Mac, Mac Receiver and Android are the supported
+platforms.
 Keep documentation clear about that distinction, and record source
 inspection, automated tests and physical-device tests separately.
 
-MeowDisplay is currently **Mac-first**: a Mac sends its screen to iPhone, iPad, Android, or another Mac. Mac-to-Mac input is implemented, though **two-Mac physical testing is still outstanding** ([#12](https://github.com/raiseCatError/meowdisplay/issues/12)).
+MeowDisplay is currently **Mac-first**: a Mac sends its screen to Android or another Mac. Mac-to-Mac input is implemented, though **two-Mac physical testing is still outstanding** ([#12](https://github.com/raiseCatError/meowdisplay/issues/12)).
 
 **Personal-first doesn't mean non-commercial.** You're welcome to use MeowDisplay for your own work, professionally or commercially. We're not currently building an enterprise remote-desktop or IT administration suite. That is a **separate, unplanned product direction** ([#86](https://github.com/raiseCatError/meowdisplay/issues/86)), not a restriction on your use.
 
 Windows ([#84](https://github.com/raiseCatError/meowdisplay/issues/84)), Linux ([#85](https://github.com/raiseCatError/meowdisplay/issues/85)), and hosted-account/relay services ([#87](https://github.com/raiseCatError/meowdisplay/issues/87)) are **ideas only, not planned features**. These issue threads exist for thoughtful discussion, not delivery promises; even consideration or prioritization is not guaranteed.
 
-A fuller explanation lives in [PRODUCT_SCOPE.md](PRODUCT_SCOPE.md).
+A fuller explanation lives in [PRODUCT_SCOPE.md](docs/PRODUCT_SCOPE.md).
 
 Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Before opening anything
 
 - Search [issues](https://github.com/raiseCatError/meowdisplay/issues) and [pull requests](https://github.com/raiseCatError/meowdisplay/pulls), including closed items, to avoid duplicates.
-- Check the current [features](https://meowdisplay.app/features.html), [receiver parity](PARITY.md), [setup guide](https://meowdisplay.app/docs.html), and [support page](SUPPORT.md).
+- Check the current [features](https://meowdisplay.app/features.html), [receiver parity](docs/PARITY.md), [setup guide](https://meowdisplay.app/docs.html), and [support page](SUPPORT.md).
 - Keep one problem or proposal per issue. State what you observed and what you tested; avoid assuming a feature exists or is scheduled.
 - Every issue and attachment is public. Remove personal content, device identifiers, private network/Tailscale addresses and hostnames, pairing codes, security keys, access tokens, logs containing secrets, and notifications **before** attaching captures or logs. If redaction cannot be verified, do not attach them.
 
@@ -56,16 +56,16 @@ GitHub Discussions is not enabled in this repository. For now, the linked **issu
 ## Contributing code or docs
 
 1. For large features, architecture changes, new dependencies or new platforms, open an issue before implementation to discuss scope. Small bug fixes and clear documentation corrections can be proposed directly.
-2. Fork the repository and base your branch on **`dev`**, the active development branch. Use a short descriptive name such as `fix/...`, `feature/...` or `infra/...`. See [BRANCHING.md](BRANCHING.md).
-3. Keep the change focused. Do not alter protocol identifiers, bundle IDs, Keychain names, signing, release workflows or public compatibility guarantees casually. Follow the [terminology guide](TERMINOLOGY.md).
-4. Read [SETUP.md](SETUP.md) and the relevant platform documentation. Run appropriate automated checks and, if possible, test the behavior on physical hardware. Tell us explicitly which platforms you **did not** test.
+2. Fork the repository and base your branch on **`dev`**, the active development branch. Use a short descriptive name such as `fix/...`, `feature/...` or `infra/...`. See [BRANCHING.md](docs/BRANCHING.md).
+3. Keep the change focused. Do not alter protocol identifiers, bundle IDs, Keychain names, signing, release workflows or public compatibility guarantees casually. Follow the [terminology guide](docs/TERMINOLOGY.md).
+4. Read [SETUP.md](docs/SETUP.md) and the relevant platform documentation. Run appropriate automated checks and, if possible, test the behavior on physical hardware. Tell us explicitly which platforms you **did not** test.
 5. Open a PR against `dev` with a **Conventional Commit-style title** such as `fix(android): restore video after reconnect`, `docs: clarify pairing` or `feat(ios): improve window switching`. Use the PR template's testing, compatibility and privacy sections. The title is required by CI (the `conventional` check) because it becomes the merge commit and changelog entry.
 
-Maintainers coordinate `release/<version>` branches; **please don't open routine contributions against release branches** or edit version numbers, tags, release manifests or `CHANGELOG.md` for an ordinary PR. [RELEASE.md](RELEASE.md) describes the separate signed-build and publication gates.
+Maintainers coordinate `release/<version>` branches; **please don't open routine contributions against release branches** or edit version numbers, tags, release manifests or `CHANGELOG.md` for an ordinary PR. [RELEASE.md](docs/RELEASE.md) describes the separate signed-build and publication gates.
 
-Relevant platform checks include the Mac Xcode schemes and tests described in [SETUP.md](SETUP.md), and Android's `./gradlew :core:test :app:testDebugUnitTest :app:lintRelease` from `AndroidReceiver/`. If a test requires hardware you do not have, document that fact instead of marking it passed. CI is not a substitute for physical QA.
+Relevant platform checks include the Mac Xcode schemes and tests described in [SETUP.md](docs/SETUP.md), and Android's `./gradlew :core:test :app:testDebugUnitTest :app:lintRelease` from `apps/android/`. If a test requires hardware you do not have, document that fact instead of marking it passed. CI is not a substitute for physical QA.
 
-Never commit signing certificates, provisioning profiles, secrets, local overrides, private logs or personal screenshots. Use synthetic data in tests and examples. Do not modify unrelated branches or generated outputs. Contributions influenced by the external OpenDisplay project should retain applicable attribution and follow [REFERENCE.md](REFERENCE.md).
+Never commit signing certificates, provisioning profiles, secrets, local overrides, private logs or personal screenshots. Use synthetic data in tests and examples. Do not modify unrelated branches or generated outputs. Contributions influenced by the external OpenDisplay project should retain applicable attribution and follow [REFERENCE.md](docs/REFERENCE.md).
 
 ## Review expectations
 
@@ -91,14 +91,14 @@ itself must be human-written and human-reviewed.
 
 User-facing strings live in String Catalogs, one set per app target:
 `Localizable.xcstrings` for the app's text and `InfoPlist.xcstrings` for
-system permission prompts, in `Mac/` (the Mac app), `iOS/` (iPhone and iPad)
-and `MacReceiver/` (the Mac Receiver). English is the source language and
+system permission prompts, in `apps/macos/` (the Mac app)
+and `apps/macos-receiver/` (the Mac Receiver). English is the source language and
 every catalog already contains the current English strings.
 
 To contribute a translation:
 
 1. Fork and clone the repository, and create a branch from `dev`.
-2. Generate and open the Xcode project as described in [SETUP.md](SETUP.md).
+2. Generate and open the Xcode project as described in [SETUP.md](docs/SETUP.md).
 3. Open a String Catalog, click **+** at the bottom of its language list and
    add your language (or select it if it already exists).
 4. Translate the entries. Read the comment shown next to a string for

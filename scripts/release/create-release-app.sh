@@ -32,7 +32,7 @@ start)
     url: "https://github.com/\($repo)",
     description: "Writes MeowDisplay release state and opens release pull requests. No webhook.",
     hook_attributes: {url: "https://meowdisplay.app", active: false},
-    redirect_url: "https://github.com/\($repo)/blob/main/RELEASE.md",
+    redirect_url: "https://github.com/\($repo)/blob/main/docs/RELEASE.md",
     public: false,
     default_permissions: {contents: "write", pull_requests: "write", issues: "write", metadata: "read"},
     default_events: []

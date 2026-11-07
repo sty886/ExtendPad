@@ -1,9 +1,8 @@
 # Getting help
 
 For the current release, see [platform availability](README.md#platform-availability--november-2-2026).
-MeowDisplay 2.0 is stable on Mac and released on iPhone/iPad. Android 2.0
-is in closed testing and requires Mac 2.0. The main Mac app shares and
-receives; the separate Receiver-only app also remains available.
+ExtendPad supports Mac, Mac Receiver and Android. The main Mac app shares
+and receives; the separate Receiver-only app is available for older Macs.
 
 For a bug report, include both app versions, OS versions, device models,
 connection route, and whether it happens in Mirror, Extend or Windows.
@@ -20,10 +19,10 @@ Remove private addresses and personal screen content from logs and screenshots.
 | A physical-device compatibility or QA observation | [Device testing / compatibility](https://github.com/raiseCatError/meowdisplay/issues/new?template=device_testing.yml) |
 | A **security or privacy vulnerability** | **Private** vulnerability reporting — never a public issue. See [SECURITY.md](SECURITY.md). |
 | A translation to contribute | [Translations in CONTRIBUTING.md](CONTRIBUTING.md#translations) |
-| A development question | [CONTRIBUTING.md](CONTRIBUTING.md) and [ARCHITECTURE.md](ARCHITECTURE.md) |
+| A development question | [CONTRIBUTING.md](CONTRIBUTING.md) and [ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 
-MeowDisplay currently focuses on a Mac sender with receivers on Mac, iPhone,
-iPad and Android. Commercial use is welcome, but an enterprise remote-desktop
+MeowDisplay currently focuses on a Mac sender with receivers on Mac
+and Android. Commercial use is welcome, but an enterprise remote-desktop
 or IT administration product is **not planned**. Windows and Linux, and
 MeowDisplay-hosted accounts/relays, are also **ideas rather than roadmap items**.
 
@@ -34,7 +33,7 @@ Discuss those directions in the appropriate existing threads:
 [hosted services #87](https://github.com/raiseCatError/meowdisplay/issues/87).
 Discussion does not guarantee consideration or implementation.
 
-See [PRODUCT_SCOPE.md](PRODUCT_SCOPE.md) for the complete distinction
+See [PRODUCT_SCOPE.md](docs/PRODUCT_SCOPE.md) for the complete distinction
 between commercial usage, personal-first design and unplanned product
 directions. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a public issue. Never
 share unredacted diagnostic logs, network addresses, private device names,

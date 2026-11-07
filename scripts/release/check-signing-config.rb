@@ -16,7 +16,7 @@ def shipped_bundle_ids(project_yml)
 end
 
 def fastfile_bundle_ids(fastfile)
-  (fastfile.scan(/bundle_id:\s*"([^"]+)"/).flatten + fastfile.scan(/^IOS_BUNDLE_ID\s*=\s*"([^"]+)"/).flatten).uniq.sort
+  fastfile.scan(/bundle_id:\s*"([^"]+)"/).flatten.uniq.sort
 end
 
 def matchfile_bundle_ids(matchfile)

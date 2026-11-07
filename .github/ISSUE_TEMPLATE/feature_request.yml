@@ -15,7 +15,6 @@ body:
       label: Which currently supported app?
       options:
         - Mac app (sender)
-        - iPhone / iPad receiver
         - Android receiver
         - Mac Receiver
         - Multiple existing platforms

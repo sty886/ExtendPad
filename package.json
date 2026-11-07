@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "MeowDisplay landing page (Vite + React + motion). Builds into docs/ for GitHub Pages.",
+  "description": "MeowDisplay landing page (Vite + React + motion). Builds into dist-site/ for GitHub Pages.",
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "dev": "vite",

@@ -160,7 +160,7 @@ h2 { font-size: clamp(1.5rem, 3vw, 2rem); line-height: 1.1; letter-spacing: -0.0
 .note { font-size: 0.84rem; color: var(--muted); margin-top: 14px; line-height: 1.5; }
 .sub { display: block; font-size: 0.84rem; color: var(--muted); margin-top: 12px; }
 /* Secondary links under the download buttons share one subtle treatment
-   (they had drifted — the iOS ones were inheriting the darker default link). */
+   (they had drifted and were inheriting the darker default link). */
 .note a, .download-option .sub a { color: var(--muted); text-decoration-color: var(--line); }
 .note a:hover, .download-option .sub a:hover { color: var(--fg); text-decoration-color: var(--line-strong); }
 .btn-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }

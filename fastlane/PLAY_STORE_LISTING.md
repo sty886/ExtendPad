@@ -1,7 +1,7 @@
 # Google Play listing — reference
 
 Canonical copy for MeowDisplay for Android's Play Console fields, kept in
-version control like [APP_STORE_LISTING.md](APP_STORE_LISTING.md). Entered by
+version control. Entered by
 hand in Play Console; the release workflow (`release-android.yml`) uploads
 the bundle only. When a field changes in Play Console, change it here too.
 
@@ -10,7 +10,7 @@ the bundle only. When a field changes in Play Console, change it here too.
 > the store listing's contact details).
 
 Only claim what the Android app does today. Check every feature line against
-[PARITY.md](../PARITY.md) before each release.
+[PARITY.md](../docs/PARITY.md) before each release.
 
 ---
 
@@ -83,7 +83,7 @@ MeowDisplay is open source under the GPL-3.0 license: https://github.com/raiseCa
 
 | Asset | Spec | File |
 |---|---|---|
-| App icon | 512 × 512 PNG | `icon-512.png` (from `assets/AppIcon-master.png`) |
+| App icon | 512 × 512 PNG | `icon-512.png` (from `assets/brand/AppIcon-master.png`) |
 | Feature graphic | 1024 × 500 PNG | `feature-graphic-1024x500.png` (Inter font, OFL) |
 | Phone screenshots | 2–8, 9:16 or 16:9 | `phone-*.png` from Try the Demo on a Moto G5S Plus (no real Mac content) |
 | Tablet screenshots | 7" and 10" | `tablet-*.png` from the tablet emulator, Try the Demo |

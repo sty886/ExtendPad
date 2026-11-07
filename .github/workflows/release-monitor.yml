@@ -1,9 +1,7 @@
 name: Release monitor
 
-# Follows every unfinished release in the release state: App Store Connect
-# build processing and review (submitting a processed build for review when
-# the release config allows it), and Google Play's per-track release
-# lifecycle (sending the uploaded build to the review track, then
+# Follows every unfinished release in the release state: Google Play's
+# per-track release lifecycle (sending the uploaded build to the review track, then
 # IN_REVIEW / APPROVED_NOT_PUBLISHED / NOT_APPROVED / PUBLISHED). It records
 # what it sees, never treats a processed build as approved, and writes the
 # readiness report. It publishes nothing itself:

@@ -60,13 +60,13 @@ jobs:
           SHA: ${{ inputs.sha }}
         run: |
           set -euo pipefail
-          if [ -f AndroidReceiver/settings.gradle.kts ]; then present=true; else present=false; fi
+          if [ -f apps/android/settings.gradle.kts ]; then present=true; else present=false; fi
           echo "present=$present" >> "$GITHUB_OUTPUT"
           record=$(scripts/release/release-state.sh "$VERSION" show STATE --platform android --sha "$SHA" --at-least uploaded)
           echo "uploaded=$(jq -r .done <<< "$record")" >> "$GITHUB_OUTPUT"
           if [ "$present" = false ]; then
             scripts/release/release-state.sh "$VERSION" record STATE --platform android --stage blocked --sha "$SHA" \
-              --set "blockers=this candidate has no Android app (AndroidReceiver/)"
+              --set "blockers=this candidate has no Android app (apps/android/)"
           fi
 
   validate:
@@ -86,7 +86,7 @@ jobs:
           java-version: '17'
           cache: gradle
       - name: Tests, lint and an unsigned release bundle
-        working-directory: AndroidReceiver
+        working-directory: apps/android
         env:
           VERSION: ${{ inputs.version }}
         run: ./gradlew --no-daemon :core:test :app:testDebugUnitTest :app:lintRelease :app:bundleRelease "-Pmeow.versionName=$VERSION"
@@ -138,9 +138,9 @@ jobs:
           code=$(scripts/release/meow-release next-build android --version "$VERSION" --latest "$highest")
           export MEOW_UPLOAD_STORE_FILE="$RUNNER_TEMP/upload.jks"
           printf '%s' "$UPLOAD_KEYSTORE_BASE64" | base64 -d > "$MEOW_UPLOAD_STORE_FILE"
-          (cd AndroidReceiver && ./gradlew --no-daemon :app:bundleRelease "-Pmeow.versionName=$VERSION" "-Pmeow.versionCode=$code")
+          (cd apps/android && ./gradlew --no-daemon :app:bundleRelease "-Pmeow.versionName=$VERSION" "-Pmeow.versionCode=$code")
           rm -f "$MEOW_UPLOAD_STORE_FILE"
-          aab=AndroidReceiver/app/build/outputs/bundle/release/app-release.aab
+          aab=apps/android/app/build/outputs/bundle/release/app-release.aab
           # The bundle must be signed by exactly the expected upload key, never
           # by a key nobody registered with Play. Not `-strict`: an upload
           # certificate is self-signed, which -strict always rejects (exit 4).

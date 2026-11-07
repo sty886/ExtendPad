@@ -18,7 +18,6 @@ apply=false; [ "${1:-}" = "--apply" ] && apply=true
 # name | deployment branches | owner approval required
 environments=(
   "release-build|release/*|no"
-  "ios-upload|release/*|no"
   "android-upload|release/*|no"
   "release-stores|main,release/*|yes"
   "release-publish|release/*|yes"

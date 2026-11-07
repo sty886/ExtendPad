@@ -11,9 +11,8 @@ name: Release publish
 #     check, reverting Latest if the feeds don't verify. Whatever GitHub
 #     Release is Latest IS the live Sparkle feed, so nothing becomes Latest
 #     incomplete. Nothing irreversible has happened before this step ends.
-#  2. stores: release the approved iOS version; Android publishes on Play
-#     Console's Publish click (managed publishing has no API), which the
-#     monitor detects.
+#  2. stores: Android publishes on Play Console's Publish click (managed
+#     publishing has no API), which the monitor detects.
 #  3. website: release.json listing only what is live, verified on the site.
 #  4. promote: a PR of the released source into main.
 #  5. finish: published, or still pending (resumed by the monitor).
@@ -104,9 +103,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
           SHA: ${{ inputs.sha }}
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          APP_STORE_CONNECT_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_KEY_CONTENT }}
           PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
         run: |
           set -euo pipefail
@@ -403,9 +399,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          APP_STORE_CONNECT_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_KEY_CONTENT }}
           PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
         run: scripts/release/release-state.sh "$VERSION" verify-live STATE --config .github/release-config.json --stores live
 
@@ -449,9 +442,6 @@ jobs:
           RELEASE_STATE_TOKEN: ${{ steps.state-token.outputs.token }}
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          APP_STORE_CONNECT_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_KEY_CONTENT }}
           PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
         run: |
           set -euo pipefail

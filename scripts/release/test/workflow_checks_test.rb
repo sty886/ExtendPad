@@ -43,7 +43,7 @@ class WorkflowChecksTest < Minitest::Test
     assert_caught("release-candidate.yml: job plan writes the release state without the release App's contents-only token",
                   "release-candidate.yml" => ["permission-contents: write", "permission-contents: write\n          permission-pull-requests: write"])
     assert_caught("writes the release state without RELEASE_STATE_TOKEN",
-                  "release-ios.yml" => ["RELEASE_STATE_TOKEN: ${{ steps.state-token.outputs.token }}", "NOT_THE_TOKEN: x"])
+                  "release-android.yml" => ["RELEASE_STATE_TOKEN: ${{ steps.state-token.outputs.token }}", "NOT_THE_TOKEN: x"])
     assert_caught("release-mac.yml: job record uses secrets outside an allowed environment",
                   "release-mac.yml" => ["environment: release-state", "environment: release-elsewhere"])
     assert_caught("publish-mac must not use secrets other than the release App key",
@@ -163,8 +163,8 @@ class WorkflowChecksTest < Minitest::Test
   def test_secrets_outside_a_checked_environment_are_caught
     assert_caught("uses secrets outside an allowed environment",
                   "release-pr.yml" => ["    environment: release-pr\n", ""])
-    assert_caught("must run check-environment.sh ios-upload before using secrets",
-                  "release-ios.yml" => ["run: scripts/release/check-environment.sh ios-upload", "run: true"])
+    assert_caught("must run check-environment.sh android-upload before using secrets",
+                  "release-android.yml" => ["run: scripts/release/check-environment.sh android-upload", "run: true"])
     assert_caught("must run check-environment.sh release-pr before using secrets",
                   "release-publish.yml" => ["run: scripts/release/check-environment.sh release-pr", "run: true"])
   end
@@ -209,7 +209,7 @@ class WorkflowChecksTest < Minitest::Test
 
   def test_supply_chain_and_injection_rules_are_caught
     assert_caught("is not pinned to a commit SHA",
-                  "release-ios.yml" => ["actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6", "actions/checkout@v6"])
+                  "release-android.yml" => ["actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6", "actions/checkout@v6"])
     assert_caught("pass inputs through env, not ${{ }} inside run",
                   "release-publish.yml" => ['run: gh release edit "v$VERSION"', 'run: gh release edit "v${{ inputs.version }}"'])
     assert_caught("release-please must set skip-github-release: true",
@@ -234,7 +234,7 @@ class WorkflowChecksTest < Minitest::Test
 
   def test_platform_workflows_never_publish_or_submit
     assert_caught("touches a store's review or release",
-                  "release-ios.yml" => ["bundle exec fastlane ios upload_candidate", "bundle exec fastlane ios release && submit_for_review"])
+                  "release-android.yml" => ["./gradlew --no-daemon :core:test", "submit_for_review\n          ./gradlew --no-daemon :core:test"])
     assert_caught("stores must wait for publish-mac (or a resume)",
                   "release-publish.yml" => ["(!inputs.resume && needs.publish-mac.result == 'success')", "(true)"])
   end
