@@ -33,11 +33,13 @@ MeowDisplay 目前也不要求或运行开发者托管的
 云账户、媒体中继或集中式设备目录。通过用户自选网络进行的远程访问
 不是托管式 MeowDisplay 远程服务。
 
-**不计划提供 Windows 和 Linux 的发送端/接收端应用。** 维护者
+**不计划提供 Windows 应用。** 维护者
 专注于直接使用和可测试的平台，而移植到新的操作系统
 会带来大量持续的维护和兼容性工作。
-如果情况发生变化，可能会重新考虑这些想法；但不会附带路线图、资金
-门槛或实现承诺。
+
+本分支额外提供**可选的 Linux（X11）发送端**（`apps/linux/`，Go +
+ffmpeg，可打成 .deb），只做发送端、只在用户自己的 X/VNC 会话上运行。
+它不属于随应用分发的受支持平台；接收端仍以官方的 Android 与 Mac 应用为准。
 
 ## 在哪里讨论不同方向
 
@@ -46,7 +48,7 @@ MeowDisplay 目前也不要求或运行开发者托管的
 | 方向 | 讨论 |
 | --- | --- |
 | Windows 发送端或接收端 | [#84](https://github.com/raiseCatError/meowdisplay/issues/84) |
-| Linux 发送端或接收端 | [#85](https://github.com/raiseCatError/meowdisplay/issues/85) |
+| Linux 接收端（发送端见 `apps/linux/`） | [#85](https://github.com/raiseCatError/meowdisplay/issues/85) |
 | 企业远程桌面或 IT 管理 | [#86](https://github.com/raiseCatError/meowdisplay/issues/86) |
 | 托管账户、中继或集中同步 | [#87](https://github.com/raiseCatError/meowdisplay/issues/87) |
 
