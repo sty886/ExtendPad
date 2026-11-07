@@ -571,7 +571,12 @@ private fun HostsCard(content: @Composable ColumnScope.() -> Unit) {
                 "Select a host, then choose USB or Wi-Fi. Discovery alone never connects.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            content()
+            // Only the host rows scroll: once there are more than two, the list
+            // gets its own window instead of stretching the page.
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 220.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) { content() }
         }
     }
 }
