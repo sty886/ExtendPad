@@ -1,0 +1,19 @@
+[Unit]
+Description=ExtendPad Linux sender (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+# A system service does not inherit HOME; the sender uses it for its identity,
+# pins and ~/.Xauthority.
+Environment=HOME=/home/%i
+ExecStart=/usr/bin/extendpad run
+Restart=on-failure
+RestartSec=10
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

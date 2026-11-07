@@ -23,8 +23,11 @@
 | 共享与接收 | macOS 14 或更高版本的 Mac |
 | 仅接收 | macOS 12 或更高版本的 Mac |
 | 接收端 | Android 10 或更高版本 |
+| 共享（可选，非 CI 覆盖） | Linux X11，见 [`apps/linux/`](apps/linux/README.md) |
 
-ExtendPad 不提供 Windows 或 Linux 发送端。视频和音频始终由 Mac 发送。
+ExtendPad 不提供 Windows 发送端。macOS 发送端是主要实现；本分支另外附带
+一个可选的 Linux（X11）发送端（`apps/linux/`，Go 实现，可打成 .deb），
+用于把 Linux 桌面或服务器画面显示到平板，详见其 README。
 
 ## 功能
 
