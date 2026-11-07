@@ -266,6 +266,29 @@ class ReceiverSessionTest {
     }
 
     @Test
+    fun aBackgroundRetryFromAnotherMacNeverReplacesALiveSession() {
+        // The global default auto-allows connections; that must still not let a
+        // second host's background recovery steal a live session.
+        val a = connect(MAC_A)
+        session.say(a, invite("a1"))
+        assertTrue(session.isAdmitted)
+
+        val b = connect(MAC_B)
+        session.say(b, invite("b1", intent = "automatic"))
+        assertEquals(listOf("b1" to "declined"), b.responses())
+        assertTrue(b.closed)
+        assertFalse(a.closed)
+        assertEquals(MAC_A, session.peerID)
+        assertTrue(session.isAdmitted)
+
+        // A manual attempt from the same peer follows the normal policy (auto-allow).
+        val manual = connect(MAC_B)
+        session.say(manual, invite("b2", intent = "manual"))
+        assertEquals(listOf("b2" to "accepted"), manual.responses())
+        assertEquals(MAC_B, session.peerID)
+    }
+
+    @Test
     fun whenTheSessionEndsFirstTheWaitingMacIsJudgedAsANewConnection() {
         val a = streamingA()
         val b = connect(MAC_B)

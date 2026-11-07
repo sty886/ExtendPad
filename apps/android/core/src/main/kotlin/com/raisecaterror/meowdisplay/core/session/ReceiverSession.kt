@@ -705,9 +705,11 @@ class ReceiverSession(
             is SenderMessage.Welcome -> {
                 candidateWelcome = message
                 if (message.pv < WireProtocol.SESSION_INVITATION) {
-                    // Can't be asked in-band: replaces the session only when an automatic invitation would.
+                    // A pre-21 sender cannot be asked in-band. A parked candidate is a
+                    // background attempt by another host: it never replaces a live
+                    // session unless that peer was explicitly marked Always Allow.
                     val accept = from.peerID in pins() &&
-                        IncomingSessionPolicy.decision(from.peerID, InvitationIntent.Automatic, policies) == IncomingDecision.Accept
+                        policies.policy(from.peerID) == PeerSessionPolicy.AlwaysAllow
                     if (accept) promoteCandidate() else dropCandidate()
                 }
             }
@@ -719,7 +721,15 @@ class ReceiverSession(
 
     private fun judgeCandidate(from: MediaLink, invitation: SessionInvitation) {
         val peerID = from.peerID
-        val decision = if (peerID in pins()) IncomingSessionPolicy.decision(peerID, invitation.intent, policies) else IncomingDecision.Decline
+        val decision = when {
+            peerID !in pins() -> IncomingDecision.Decline
+            // A parked candidate is a background attempt by another host. It must
+            // never replace a live session: only an explicit manual Connect can ask
+            // to switch (or an explicit per-peer Always Allow).
+            invitation.intent == InvitationIntent.Automatic &&
+                policies.policy(peerID) != PeerSessionPolicy.AlwaysAllow -> IncomingDecision.Decline
+            else -> IncomingSessionPolicy.decision(peerID, invitation.intent, policies)
+        }
         fun answer(result: InvitationResult) = from.send(ReceiverMessages.encode(ReceiverMessages.invitationResponse(invitation.id, result)))
         when (decision) {
             IncomingDecision.Accept -> promoteCandidate()?.let { handleInvitation(it, invitation) }
