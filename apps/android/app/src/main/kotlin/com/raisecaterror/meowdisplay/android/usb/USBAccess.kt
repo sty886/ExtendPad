@@ -16,6 +16,7 @@ import com.raisecaterror.meowdisplay.core.usb.USBAccessoryRelay
 import com.raisecaterror.meowdisplay.core.usb.USBAccessoryWire
 import com.raisecaterror.meowdisplay.core.usb.USBHostAction
 import com.raisecaterror.meowdisplay.core.usb.USBHostAdvertisement
+import com.raisecaterror.meowdisplay.core.usb.USBHostAvailability
 import com.raisecaterror.meowdisplay.core.usb.USBHostDiscoveryWire
 import com.raisecaterror.meowdisplay.core.usb.USBHostRequest
 import kotlinx.coroutines.CoroutineScope
@@ -65,11 +66,12 @@ class USBAccess(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val usb = context.getSystemService(UsbManager::class.java)
-    private val currentHost = MutableStateFlow<USBHostAdvertisement?>(null)
+    /** Withdraws the Mac from the UI when the ADB-reverse discovery route stops answering. */
+    private val availability = USBHostAvailability()
     private val pendingMac = MutableStateFlow<String?>(null)
     private val lastError = MutableStateFlow<String?>(null)
 
-    val host: StateFlow<USBHostAdvertisement?> = currentHost.asStateFlow()
+    val host: StateFlow<USBHostAdvertisement?> = availability.host
     val pending: StateFlow<String?> = pendingMac.asStateFlow()
     val error: StateFlow<String?> = lastError.asStateFlow()
 
@@ -108,7 +110,12 @@ class USBAccess(
 
     init {
         scope.launch {
-            media.ui.collect { ui -> if (ui.admitted) pendingMac.value = null }
+            // Only the Mac this request was sent to answers it: another host's
+            // admission (for example the Linux sender on Wi-Fi) must not clear
+            // a USB request that is still waiting for its own Mac.
+            media.ui.collect { ui ->
+                if (ui.admitted && ui.peerID == pendingMac.value) pendingMac.value = null
+            }
         }
         registerPermissionReceiver()
     }
@@ -148,7 +155,7 @@ class USBAccess(
         adbDiscoverJob?.cancel()
         adbDiscoverJob = null
         closeLink()
-        currentHost.value = null
+        availability.clear()
         pendingMac.value = null
     }
 
@@ -165,12 +172,24 @@ class USBAccess(
         if (!sent) {
             pendingMac.value = null
             media.clearRemoteConnect(peerID)
-            if (link == null) lastError.value = "USB connection request failed. Check the cable and that the Mac app is open."
+            if (link == null) {
+                // The route just failed to answer: withdraw it instead of leaving
+                // "USB available" on a Mac that can no longer be reached over USB.
+                availability.clear()
+                lastError.value = "USB connection request failed. Check the cable and that the Mac app is open."
+            }
             return
         }
         scope.launch {
-            delay(30_000)
-            if (pendingMac.compareAndSet(peerID, null)) media.clearRemoteConnect(peerID)
+            delay(REQUEST_TIMEOUT_MS)
+            if (!pendingMac.compareAndSet(peerID, null)) return@launch
+            media.clearRemoteConnect(peerID)
+            // A Mac that is asking its own user is not a failure; anything else
+            // (no dial, no response) must be told to the person, not dropped silently.
+            val waitingForMac = media.ui.value.let { it.peerID == peerID && it.awaitingMacApproval }
+            if (!waitingForMac) {
+                lastError.value = "The Mac didn't answer over USB. Check the cable and that ExtendPad is open on the Mac."
+            }
         }
     }
 
@@ -185,7 +204,18 @@ class USBAccess(
         }
         if (!sent) {
             pendingMac.value = null
-            lastError.value = "USB pairing request failed. Check the cable and that the Mac app is open."
+            if (link == null) {
+                availability.clear()
+                lastError.value = "USB pairing request failed. Check the cable and that the Mac app is open."
+            }
+            return
+        }
+        scope.launch {
+            delay(PAIR_REQUEST_TIMEOUT_MS)
+            if (!pendingMac.compareAndSet(peerID, null)) return@launch
+            // Pairing shows its own code prompt; getting this far without one
+            // means the Mac never started the ceremony over USB.
+            lastError.value = "USB pairing didn't start. Check the cable and that ExtendPad is open on the Mac."
         }
     }
 
@@ -202,8 +232,12 @@ class USBAccess(
                         USBHostRequest(USBHostDiscoveryWire.VERSION, USBHostAction.Discover, null, localID())
                     )
                     if (found != null && link == null) {
-                        if (currentHost.value?.peerID != found.peerID) Log.i(TAG, "ADB discovery: ${found.name} paired=${found.paired}")
-                        currentHost.value = found
+                        if (availability.host.value?.peerID != found.peerID) Log.i(TAG, "ADB discovery: ${found.name} paired=${found.paired}")
+                        availability.received(found)
+                    } else if (found == null) {
+                        // The reverse tunnel can die without notice (cable, adb server,
+                        // Mac app quit). Stop offering a USB row that cannot connect.
+                        availability.missed()
                     }
                     delay(if (found == null) 1_000 else 2_000)
                 } else {
@@ -272,7 +306,7 @@ class USBAccess(
         runCatching { link?.input?.close() }
         runCatching { link?.output?.close() }
         link = null
-        currentHost.value = null
+        availability.clear()
     }
 
     private fun UsbAccessory.matchesExtendPad(): Boolean =
@@ -283,7 +317,7 @@ class USBAccess(
         accessoryDiscoverJob?.cancel()
         accessoryDiscoverJob = scope.launch {
             while (isActive) {
-                if (foreground && link != null && currentHost.value == null) {
+                if (foreground && link != null && availability.host.value == null) {
                     sendAOA(USBHostRequest(USBAccessoryWire.VERSION, USBHostAction.Discover, null, localID()))
                 }
                 delay(2_000)
@@ -357,7 +391,7 @@ class USBAccess(
             bytes = rest
             val message = runCatching { USBAccessoryWire.parse(body) }.getOrNull() ?: continue
             when (message) {
-                is USBAccessoryMessage.Advertisement -> currentHost.value = message.advertisement
+                is USBAccessoryMessage.Advertisement -> availability.received(message.advertisement)
                 is USBAccessoryMessage.Relay -> {
                     if (!startRelay(message.relay, rest)) return ByteArray(0)
                     return ByteArray(0)
@@ -418,5 +452,11 @@ class USBAccess(
         return true
     }
 
-    private companion object { const val TAG = "ExtendPadUSB" }
+    private companion object {
+        const val TAG = "ExtendPadUSB"
+        /** Long enough for a slow Mac to dial; the Connect request itself stands 30 s too. */
+        const val REQUEST_TIMEOUT_MS = 30_000L
+        /** The Mac starts the pairing ceremony within a few seconds; by 65 s it never did. */
+        const val PAIR_REQUEST_TIMEOUT_MS = 65_000L
+    }
 }

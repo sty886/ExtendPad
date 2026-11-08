@@ -49,4 +49,34 @@ final class USBSecureTransportPolicyTests: XCTestCase {
         XCTAssertEqual(resolvedFirst?.peerID, "peer-1")
         XCTAssertNil(resolvedSecond)
     }
+
+    // MARK: - A learned UDID is only offered while its device is attached
+
+    func testAttachedUDIDIsOfferedForItsPeer() {
+        XCTAssertEqual(USBSecureTransportPolicy.attachedUDID(
+            peerID: "peer-1", installIDByUDID: ["udid-1": "peer-1"], attachedUDIDs: ["udid-1"]), "udid-1")
+    }
+
+    func testDetachedDeviceIsNeverOffered() {
+        // The mapping survives unplugging; a USB dial to it would fail forever
+        // with "adb: device not found" and block the routes that do work.
+        XCTAssertNil(USBSecureTransportPolicy.attachedUDID(
+            peerID: "peer-1", installIDByUDID: ["udid-1": "peer-1"], attachedUDIDs: []))
+        XCTAssertNil(USBSecureTransportPolicy.attachedUDID(
+            peerID: "peer-1", installIDByUDID: ["udid-1": "peer-1"], attachedUDIDs: ["udid-other"]))
+    }
+
+    func testAnotherPeersDeviceIsNeverOffered() {
+        XCTAssertNil(USBSecureTransportPolicy.attachedUDID(
+            peerID: "peer-1", installIDByUDID: ["udid-2": "peer-2"], attachedUDIDs: ["udid-2"]))
+    }
+
+    func testSeveralAttachedDevicesChooseTheLowestSerial() {
+        // Which entry the dictionary yields is unspecified; the choice must not be.
+        let mapping = ["udid-z": "peer-1", "udid-a": "peer-1", "udid-m": "peer-1"]
+        XCTAssertEqual(USBSecureTransportPolicy.attachedUDID(
+            peerID: "peer-1", installIDByUDID: mapping, attachedUDIDs: ["udid-z", "udid-m"]), "udid-m")
+        XCTAssertEqual(USBSecureTransportPolicy.attachedUDID(
+            peerID: "peer-1", installIDByUDID: mapping, attachedUDIDs: Set(mapping.keys)), "udid-a")
+    }
 }

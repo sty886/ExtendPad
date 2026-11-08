@@ -1022,6 +1022,10 @@ final class SenderController: ObservableObject {
     private var androidUSBWatcher: AndroidUSBDeviceWatcher?
     private var usbDiscoveryListener: USBHostDiscoveryListener?
     private var androidUSBDevices: [USBDevice] = []
+    /// USB control requests that arrived while `adb devices` showed no device,
+    /// and the one in-flight re-read that will handle them once it does.
+    private var usbRequestsAwaitingDevice: [USBHostRequest] = []
+    private var usbDeviceRescan: Task<Void, Never>?
     private var activePairingPeerIDs: Set<String> = []
     // Forwards each live session's own @Published changes (status, route,
     // applicationAuthenticated) into this controller's objectWillChange —
@@ -1140,7 +1144,11 @@ final class SenderController: ObservableObject {
         startPairingListener()
         startRemoteConnectRequestListener()
         let discovery = USBHostDiscoveryListener(advertisement: { [weak self] in
-            guard let self, let peerID = TrustStore.shared.installID() else { return nil }
+            // USB discovery only exists while an authorized Android device is
+            // attached: with none there is no tunnel to answer on, and claiming
+            // otherwise would offer a Connect the Mac can only drop.
+            guard let self, !self.androidUSBDevices.isEmpty,
+                  let peerID = TrustStore.shared.installID() else { return nil }
             let paired = self.androidUSBDevices.contains { device in
                 self.installIDByUDID[device.udid].map { TrustStore.shared.hasPin(peerID: $0) } == true
             }
@@ -1168,6 +1176,18 @@ final class SenderController: ObservableObject {
         let detached = Set(usbDevices.map(\.udid)).subtracting(devices.map(\.udid))
         usbPairingAttemptedUDIDs.subtract(detached)
         usbDevices = devices
+        // An unadmitted USB attempt for a device that is gone can never finish;
+        // left alive it redials `adb: device not found` forever and owns the
+        // peer, which would swallow the person's next explicit Connect.
+        let detachedSessions = sessions.filter { session in
+            guard !session.failed, !session.invitationAdmitted,
+                  case .usb(let udid?) = session.target else { return false }
+            return detached.contains(udid)
+        }
+        for session in detachedSessions {
+            Log.info("connectDebug: USB device detached — ending unadmitted session \(session.id)")
+            end(session)
+        }
         scheduleAutoConnect()
     }
 
@@ -1968,8 +1988,43 @@ final class SenderController: ObservableObject {
     }
 
     private func handleUSBHostRequest(_ request: USBHostRequest) {
-        guard let peerID = request.peerID, peerID == TrustStore.shared.installID(),
-              let device = androidUSBDevices.first else { return }
+        guard let peerID = request.peerID, peerID == TrustStore.shared.installID() else {
+            Log.info("usbRequest: ignored action=\(request.action.rawValue) — not addressed to this Mac")
+            return
+        }
+        guard let device = androidUSBDevices.first else {
+            // The watcher polls adb every few seconds; a request that arrives in
+            // that gap (or after a transient `adb devices` failure) must not be
+            // dropped. Re-read the authorized list once and then handle it.
+            rescanUSBDeviceListFor(request)
+            return
+        }
+        handleUSBHostRequest(request, device: device)
+    }
+
+    private func rescanUSBDeviceListFor(_ request: USBHostRequest) {
+        usbRequestsAwaitingDevice.append(request)
+        guard usbDeviceRescan == nil else { return }
+        Log.info("usbRequest: no authorized Android device cached — rescanning")
+        usbDeviceRescan = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let result = await AndroidUSB.connectedDevices(preparedSerial: nil)
+            self.usbDeviceRescan = nil
+            if !result.devices.isEmpty {
+                self.androidUSBDevices = result.devices.map(AndroidUSB.asUSBDevice)
+                self.updateUSBDevices()
+            }
+            let waiting = self.usbRequestsAwaitingDevice
+            self.usbRequestsAwaitingDevice = []
+            guard let device = self.androidUSBDevices.first else {
+                Log.info("usbRequest: dropped \(waiting.count) request(s) — no authorized Android device attached")
+                return
+            }
+            for pending in waiting { self.handleUSBHostRequest(pending, device: device) }
+        }
+    }
+
+    private func handleUSBHostRequest(_ request: USBHostRequest, device: USBDevice) {
         // The receiver names its own install id. It is only a hint: accept it
         // only for a peer this Mac already pinned, so a USB cable (or a
         // spoofed request) cannot introduce trust. The TLS handshake still
@@ -1986,11 +2041,37 @@ final class SenderController: ObservableObject {
         case .pair:
             attemptUSBPairingIfNeeded(devices: [device])
         case .connect:
-            guard let receiverPeerID = installIDByUDID[device.udid],
-                  TrustStore.shared.hasPin(peerID: receiverPeerID),
-                  let needsApproval = incomingRequestNeedsApproval(peerID: receiverPeerID, intent: .manual)
-            else { return }
-            connect(to: .usb(udid: device.udid), userInitiated: true, routeSelected: true,
+            guard let receiverPeerID = installIDByUDID[device.udid] else {
+                Log.info("usbRequest: connect ignored — this USB device has no known receiver identity")
+                return
+            }
+            guard TrustStore.shared.hasPin(peerID: receiverPeerID) else {
+                Log.info("usbRequest: connect ignored — receiver is not paired")
+                return
+            }
+            let usbTarget = ConnectionTarget.usb(udid: device.udid)
+            let existing = sessions.first {
+                !$0.failed && ($0.deviceID == receiverPeerID || $0.intendedPeerID == receiverPeerID)
+            }
+            if let existing, existing.invitationAdmitted {
+                // The person explicitly chose USB on a device already viewing
+                // this Mac: move the live session to the cable (startSession's
+                // route arbitration migrates it) instead of discarding the request.
+                Log.info("connectDebug: explicit USB connect migrates an admitted session peer=\(receiverPeerID) from=\(existing.id)")
+                connect(to: usbTarget, userInitiated: true, routeSelected: true, initiator: .receiver)
+                return
+            }
+            if let existing {
+                // An unadmitted attempt must not absorb the cable request: the
+                // person chose USB now. This includes a stuck USB retry for this
+                // same device (a dial that keeps failing because the serial is
+                // gone) — it would otherwise keep the peer owned, and every
+                // later request would be classified "already handled".
+                Log.info("connectDebug: explicit USB connect replaces an unadmitted session peer=\(receiverPeerID) from=\(existing.id)")
+                end(existing)
+            }
+            guard let needsApproval = incomingRequestNeedsApproval(peerID: receiverPeerID, intent: .manual) else { return }
+            connect(to: usbTarget, userInitiated: true, routeSelected: true,
                     initiator: .receiver, needsSenderApproval: needsApproval)
         }
     }
@@ -3722,9 +3803,13 @@ final class SenderController: ObservableObject {
 
     /// A currently reachable (but not yet connected) target for a known
     /// peer, so its row can offer Connect without waiting for it to also
-    /// appear as a Nearby row.
+    /// appear as a Nearby row. A learned USB mapping outlives the cable, so
+    /// USB is only chosen while that device is attached; otherwise a Wi-Fi
+    /// dial that can actually work is preferred.
     private func resolvedTarget(forPeerID peerID: String) -> ConnectionTarget? {
-        if let udid = installIDByUDID.first(where: { $0.value == peerID })?.key {
+        if let udid = USBSecureTransportPolicy.attachedUDID(
+            peerID: peerID, installIDByUDID: installIDByUDID,
+            attachedUDIDs: Set(usbDevices.map(\.udid))) {
             return .usb(udid: udid)
         }
         if let result = discovered.first(where: { txtID(of: $0) == peerID }) {

@@ -104,6 +104,20 @@ internal object ChineseText {
         "Pair via Wi-Fi" to "通过 Wi-Fi 配对",
         "USB available" to "USB 可用",
         "Wi-Fi available" to "Wi-Fi 可用",
+        "USB connection request failed. Check the cable and that the Mac app is open." to
+            "USB 连接请求失败。请检查数据线，并确认 Mac 上的 ExtendPad 已打开。",
+        "USB pairing request failed. Check the cable and that the Mac app is open." to
+            "USB 配对请求失败。请检查数据线，并确认 Mac 上的 ExtendPad 已打开。",
+        "USB connection dropped. Check the cable." to "USB 连接已断开。请检查数据线。",
+        "USB connection ended. Check the cable." to "USB 连接已结束。请检查数据线。",
+        "Android didn't open the USB accessory. Unplug and reconnect the cable." to
+            "Android 未能打开 USB 配件。请拔下数据线并重新连接。",
+        "USB is connected, but the Mac couldn't reach the receiver." to
+            "USB 已连接，但 Mac 无法连接到接收端。",
+        "The Mac didn't answer over USB. Check the cable and that ExtendPad is open on the Mac." to
+            "Mac 未通过 USB 应答。请检查数据线，并确认 Mac 上的 ExtendPad 已打开。",
+        "USB pairing didn't start. Check the cable and that ExtendPad is open on the Mac." to
+            "USB 配对未开始。请检查数据线，并确认 Mac 上的 ExtendPad 已打开。",
         "Looking for Macs on Wi-Fi and USB…" to "正在通过 Wi-Fi 和 USB 查找 Mac…",
         "This Mac is no longer available." to "此 Mac 已不再可用。",
         "Clear Finished" to "清除已完成项目",

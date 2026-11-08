@@ -23,4 +23,16 @@ class ChineseTextTest {
             ChineseText.translate("Mirror · View Only · Remote"),
         )
     }
+
+    @Test
+    fun usbFailureDialogsAreChinese() {
+        assertEquals(
+            "Mac 未通过 USB 应答。请检查数据线，并确认 Mac 上的 ExtendPad 已打开。",
+            ChineseText.translate("The Mac didn't answer over USB. Check the cable and that ExtendPad is open on the Mac."),
+        )
+        assertEquals(
+            "USB 连接请求失败。请检查数据线，并确认 Mac 上的 ExtendPad 已打开。",
+            ChineseText.translate("USB connection request failed. Check the cable and that the Mac app is open."),
+        )
+    }
 }
