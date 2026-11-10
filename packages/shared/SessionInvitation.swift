@@ -1,5 +1,29 @@
 import Foundation
 
+// MARK: - Receiver Connect request addressing
+
+/// The receiver's Bonjour Connect request (PROTOCOL.md 6.9): a one-shot `cr`
+/// token, plus the install id of the single sender the receiver's user asked
+/// for. Both are unauthenticated discovery metadata — the sender still dials
+/// only a receiver it has pinned, over pinned mutual TLS — but the target is
+/// what keeps every *other* paired sender from answering a request meant for
+/// one host (for example a Mac and a Linux sender both paired to one tablet).
+enum ReceiverConnectRequestTXT {
+    static let token = "cr"
+    static let target = "crt"
+}
+
+enum ReceiverConnectRequestTargeting {
+    /// Whether this sender should answer a receiver's request. No target
+    /// (receivers before `crt`) keeps the old behavior: every paired sender
+    /// may answer. With a target, only the named sender may dial.
+    static func addressed(to ownID: String?, target: String?) -> Bool {
+        guard let target, !target.isEmpty else { return true }
+        guard let ownID, !ownID.isEmpty else { return false }
+        return target == ownID
+    }
+}
+
 // Trusted-device session invitations (pv 21). Pure, platform-neutral logic
 // shared by the Mac Sender, the iPhone/iPad Receiver and the Mac Receiver so
 // the hostless test target can cover all of it.

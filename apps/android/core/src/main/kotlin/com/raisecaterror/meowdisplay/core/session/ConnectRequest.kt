@@ -37,6 +37,14 @@ class ConnectRequestState(private val random: SecureRandom = SecureRandom()) {
     @Synchronized
     fun token(now: Long): String? = current?.takeIf { now < it.tokenUntil }?.token
 
+    /**
+     * The token and the Mac it asks, read together so one advertisement never pairs a
+     * token with another request's target. Both are discovery metadata only.
+     */
+    @Synchronized
+    fun advertisement(now: Long): Pair<String, String>? =
+        current?.takeIf { now < it.tokenUntil }?.let { it.token to it.peerID }
+
     /** The mode to put in a hello for [peerID]: only the Mac that was asked, only while the request stands. */
     @Synchronized
     fun requestedMode(peerID: String?, now: Long): DisplayMode? =

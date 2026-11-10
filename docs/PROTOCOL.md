@@ -91,6 +91,9 @@ Mac 发送端和 iOS 接收端；它们的行为仅作为示例引用，除非�
 | `id` | UUID 字符串 | pv 1 时代 | 每次安装的稳定身份。MUST 等于稍后在 `hello` 中发送的 `id`。让发送端能够识别“同一设备，不同传输/名称”。 |
 | `pv` | 以字符串表示的十进制整数，例如 `"3"` | pv 2 | 接收端的协议版本。缺失表示 `pv` 1。让发送端在拨打前评估兼容性。 |
 
+一次显式 Connect 期间（6.9 节），该记录还会临时携带一次性 `cr` 令牌和
+被点名的发送端 `crt` install id；两者都是仅用于发现的未认证元数据。
+
 发送端 MUST 容忍缺失的 TXT 记录和缺失的键（`pv` 2 之前的接收端两者都不
 通告）。
 
@@ -1028,8 +1031,13 @@ TrustStore/安全状态混在一起。低于 `pv` 15 的接收端没有强制 UI
   或 `remoteRequestPort` 上的已认证敲门）。发送端在拨号前应用自己的入站
   政策：阻止 → 不拨号；手动批准 → 拨号，但在其用户决定之前暂停采集，并且
   仅在被拨号连接的 `hello` 已证明已固定对端后才显示自己的提示（`cr` 令牌
-  和 TXT 记录的其余部分未经认证）。`cr` 令牌不携带数据，仅针对明确的用户
-  操作发布。敲门在已固定连接上携带一帧，成帧方式与控制通道相同：
+  和 TXT 记录的其余部分未经认证）。`cr` 令牌本身不携带数据，仅针对明确的
+  用户操作发布；同一次通告还在 `crt` 键（增量字段，同样未经认证）中给出
+  被点名的发送端 install id。发送端 MUST 忽略目标不是自己的 `cr` 令牌：
+  一个接收端可以同时配对多台发送端（例如一台 Mac 和一台 Linux 主机），
+  否则每一台都会回应用户只针对其中一台的 Connect，并短暂抢占会话。缺少
+  `crt` 的旧接收端表示请求未点名，每个已配对的发送端仍像以前一样响应。
+  敲门在已固定连接上携带一帧，成帧方式与控制通道相同：
   `{"type":"remoteConnectRequest","intent":"manual"}` 或 `"automatic"`。
   接收端仅当其用户对该发送端的显式请求尚未完成时才发送 `manual`；其自身的
   自动恢复发送 `automatic`。发送端在敲门进入的路由上应答：通过隧道
@@ -1100,8 +1108,8 @@ Forget 和 Block 是两端的撤销：它们结束仍在等待该对端的任何
 当连接证书不再解析到已固定对端时，接收端拒绝邀请（并关闭 pv 21 之前的
 发送端），无论“自动允许连接”怎么设置。接收端的 Block 在该连接属于该
 发送端时也会结束当前连接，并取消该发送端停放的替换连接。撤回自己的
-Connect 请求（例如 Wake & Connect 上的 Cancel）会移除 `cr` 令牌并停止发送
-`hello.requestedMode`；之后拨号的发送端按正常入站政策评判。
+Connect 请求（例如 Wake & Connect 上的 Cancel）会移除 `cr` 令牌及其 `crt`
+目标并停止发送 `hello.requestedMode`；之后拨号的发送端按正常入站政策评判。
 
 兼容性：发送端绝不在 pv 21 以下发送 `sessionInvite`，并像以前一样接纳此类
 接收端。面对 pv 21 之前发送端（从 `welcome.pv` 可知）的接收端，仅当它愿意
@@ -1767,6 +1775,7 @@ sequenceDiagram
 | 2026-10-30 | 增量式，无 `pv` 变更：从台前预览关闭窗口（6.10 节）、`welcome.features` `windowClose`、`windowClose`、`windowCloseResult`；Remote Finder 写入和传输（6.12 节）；记录了 `windowCatalog` 窗口 `strip`、`windowThumbnail` `stale`/`reason`（6.10 节） |
 | 2026-10-30 | 增量式：统一剪贴板（`clip`、`welcome.features` `"clipboard"`，6.15 节） |
 | 2026-11-07 | 增量式，无 `pv` 变更：任何 `keyboard` 动作可携带 `t`（接收端以发送端时钟表示的发送时间），用于输入延迟遥测 |
+| 2026-11-10 | 增量式，无 `pv` 变更：`_opensidecar._tcp` 的 `cr` Connect 令牌旁增加 `crt`（被点名的发送端 install id），使多台已配对发送端中只有被用户请求的那一台拨号（6.9 节） |
 ### 6.16 锁定此 Mac (`lockMac` / `lockMacResult`) (Lock This Mac)
 
 当 Mac 的 `welcome.features` 列出 `lockMac` 时提供；在每种显示模式下都有效。

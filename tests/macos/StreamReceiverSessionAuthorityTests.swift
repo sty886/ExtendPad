@@ -184,6 +184,7 @@ final class StreamReceiverSessionAuthorityTests: XCTestCase {
         receiver.connectPrimary(peerID: peer, mode: .extend)
         var state = await waitForProbe(receiver) { $0.connectRequestToken != nil && $0.phase == .reconnecting }
         XCTAssertNotNil(state.connectRequestToken)
+        XCTAssertEqual(state.connectRequestTarget, peer, "the cr token names the Mac the user asked for")
         XCTAssertEqual(state.phase, .reconnecting)
         XCTAssertEqual(state.outgoingSessionRequestPeerID, peer)
         XCTAssertEqual(state.requestedMode, .extend)
@@ -193,6 +194,7 @@ final class StreamReceiverSessionAuthorityTests: XCTestCase {
         receiver.cancelConnectRequest(peerID: peer)
         state = await waitForProbe(receiver) { $0.phase == .disconnected && $0.connectRequestToken == nil }
         XCTAssertNil(state.connectRequestToken, "the cr token must be withdrawn")
+        XCTAssertNil(state.connectRequestTarget, "and its target goes with it")
         XCTAssertEqual(state.phase, .disconnected, "the manual recovery run must end")
         XCTAssertFalse(state.hasOutgoingSessionRequest)
         XCTAssertNil(state.requestedMode)

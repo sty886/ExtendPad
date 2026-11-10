@@ -24,6 +24,18 @@ class ConnectRequestTest {
     }
 
     @Test
+    fun theAdvertisementNamesTheMacThatWasAsked() {
+        val s = ConnectRequestState()
+        s.request("mac-a", DisplayMode.Extend, now = 1_000)
+        assertEquals(s.token(1_000) to "mac-a", s.advertisement(1_000))
+        assertNull("no target once the token expires", s.advertisement(1_000 + ConnectRequestState.TOKEN_MS))
+        s.request("mac-b", DisplayMode.Mirror, now = 20_000)
+        assertEquals("a new request targets the new Mac", "mac-b", s.advertisement(20_000)?.second)
+        s.requestRemote("mac-c", DisplayMode.Mirror, now = 30_000)
+        assertNull("a Remote Connect publishes nothing", s.advertisement(30_000))
+    }
+
+    @Test
     fun requestedModeGoesOnlyToTheMacThatWasAskedWhileTheRequestStands() {
         val s = ConnectRequestState()
         s.request("mac-a", DisplayMode.Mirror, now = 0)
