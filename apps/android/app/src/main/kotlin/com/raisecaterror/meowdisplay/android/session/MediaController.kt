@@ -162,7 +162,12 @@ class MediaController(
 
     private fun advertiseMedia() {
         val txt = ServiceTypes.mediaTxt(identity.installID, WireProtocol.VERSION).toMutableMap()
-        connectRequests.token(SystemClock.elapsedRealtime())?.let { txt["cr"] = it }
+        connectRequests.advertisement(SystemClock.elapsedRealtime())?.let { (token, peerID) ->
+            txt["cr"] = token
+            // The request names the one sender the user asked for: another paired
+            // sender (for example a Linux host) must not answer it too.
+            txt["crt"] = peerID
+        }
         bonjour.advertise(ServiceTypes.MEDIA, localName(), ServiceTypes.MEDIA_PORT, txt)
     }
 

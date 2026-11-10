@@ -583,6 +583,10 @@ final class ReceiverAdvertisementState: @unchecked Sendable {
     private let lock = NSLock()
     private var serviceName: String
     private var connectRequestToken: String?
+    /// The sender a standing Connect was meant for (TXT `crt`), when the user
+    /// tapped one specific Mac. Nil keeps the pre-target behavior for a Connect
+    /// that names none and for receivers that predate it.
+    private var connectRequestTarget: String?
 
     init(serviceName: String) {
         self.serviceName = serviceName
@@ -604,11 +608,14 @@ final class ReceiverAdvertisementState: @unchecked Sendable {
     }
 
     /// Publishes a fresh token, replacing/invalidating any previous one.
+    /// `targeting` is the install id of the Mac the user asked for; nil for a
+    /// Connect that names none.
     @discardableResult
-    func beginConnectRequest() -> String {
+    func beginConnectRequest(targeting peerID: String? = nil) -> String {
         lock.lock(); defer { lock.unlock() }
         let token = UUID().uuidString
         connectRequestToken = token
+        connectRequestTarget = peerID
         return token
     }
 
@@ -619,7 +626,10 @@ final class ReceiverAdvertisementState: @unchecked Sendable {
     func clearConnectRequestIfCurrent(_ token: String) -> Bool {
         lock.lock()
         let matched = connectRequestToken == token
-        if matched { connectRequestToken = nil }
+        if matched {
+            connectRequestToken = nil
+            connectRequestTarget = nil
+        }
         lock.unlock()
         return matched
     }
@@ -632,6 +642,7 @@ final class ReceiverAdvertisementState: @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         let hadToken = connectRequestToken != nil
         connectRequestToken = nil
+        connectRequestTarget = nil
         return hadToken
     }
 
@@ -640,15 +651,26 @@ final class ReceiverAdvertisementState: @unchecked Sendable {
         return connectRequestToken
     }
 
+    func currentConnectRequestTarget() -> String? {
+        lock.lock(); defer { lock.unlock() }
+        return connectRequestTarget
+    }
+
     func mediaService(installID: String, protocolVersion: Int) -> NWListener.Service {
         lock.lock()
         let name = serviceName
         let token = connectRequestToken
+        let target = connectRequestTarget
         lock.unlock()
         var txt = NWTXTRecord()
         txt["id"] = installID
         txt["pv"] = String(protocolVersion)   // issue #132
-        if let token { txt["cr"] = token }
+        if let token {
+            txt[ReceiverConnectRequestTXT.token] = token
+            // Name the one sender the user asked for, so another paired sender
+            // does not answer this request too (PROTOCOL.md 6.9).
+            if let target { txt[ReceiverConnectRequestTXT.target] = target }
+        }
         return NWListener.Service(name: name, type: "_opensidecar._tcp",
                                   domain: nil, txtRecord: txt)
     }
@@ -4926,7 +4948,9 @@ final class StreamReceiver: ObservableObject {
         if outgoingSessionRequest.map({ Date() >= $0.until }) ?? true {
             outgoingSessionRequest = (request.peerID, request.until)
         }
-        let token = advertisementState.beginConnectRequest()
+        // A Connect for one specific Mac says so in its TXT record; a
+        // generic Reconnect names none and keeps the old untargeted request.
+        let token = advertisementState.beginConnectRequest(targeting: request.peerID)
         connectRequestClearWorkItem?.cancel()
         if let tlsListener = tlsListenerState.currentListener() { tlsListener.service = advertisedService }
         let clear = DispatchWorkItem { [weak self] in
@@ -5112,6 +5136,7 @@ final class StreamReceiver: ObservableObject {
         var outgoingSessionRequestPeerID: String?
         var requestedMode: ReceiverDisplayMode?
         var connectRequestToken: String?
+        var connectRequestTarget: String?
         var manualConnectPeerID: String?
         var manualConnectRequest: ManualConnectRequest?
         var phase: ReceiverSessionPhase = .disconnected
@@ -5138,6 +5163,7 @@ final class StreamReceiver: ObservableObject {
                 outgoingSessionRequestPeerID: receiver.outgoingSessionRequest?.peerID,
                 requestedMode: receiver.helloState.requestedMode(),
                 connectRequestToken: receiver.advertisementState.currentConnectRequestToken(),
+                connectRequestTarget: receiver.advertisementState.currentConnectRequestTarget(),
                 manualConnectPeerID: context.manualConnectPeerID,
                 manualConnectRequest: context.manualConnectRequest)
             Task {

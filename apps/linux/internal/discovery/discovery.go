@@ -25,6 +25,17 @@ type Receiver struct {
 	PV           int
 	PP           int
 	ConnectToken string
+	// ConnectTarget is the install id of the one sender the receiver's user
+	// asked for (TXT `crt`). Empty on receivers that predate targeting: such a
+	// request names nobody, so every paired sender may answer it.
+	ConnectTarget string
+}
+
+// AskedFor reports whether this Connect request is addressed to senderID. A
+// receiver that predates `crt` publishes no target: its request names nobody,
+// so every paired sender answers it, exactly as before.
+func (r Receiver) AskedFor(senderID string) bool {
+	return r.ConnectTarget == "" || r.ConnectTarget == senderID
 }
 
 func (r Receiver) Label() string {
@@ -185,6 +196,8 @@ func convert(entry *zeroconf.ServiceEntry) (Receiver, bool) {
 			receiver.PP, _ = strconv.Atoi(value)
 		case "cr":
 			receiver.ConnectToken = value
+		case "crt":
+			receiver.ConnectTarget = value
 		}
 	}
 	return receiver, true

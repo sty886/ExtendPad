@@ -399,6 +399,13 @@ func commandRun(arguments []string) error {
 			if pins.Pin(receiver.InstallID) == nil {
 				return
 			}
+			// The receiver's Connect names the sender its user asked for. This
+			// host must not dial just because another paired sender (say, the
+			// Mac) was requested; it would replace the session the user wanted.
+			if !receiver.AskedFor(id.InstallID) {
+				logf("connect request from %s is for another sender; ignoring", receiver.Name)
+				return
+			}
 			logf("connect request from %s", receiver.Name)
 			select {
 			case wake <- knock.Request{PeerID: receiver.InstallID, RemoteIP: receiver.Host, Intent: "manual"}:

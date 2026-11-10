@@ -1816,7 +1816,14 @@ final class SenderController: ObservableObject {
     }
 
     private func connectRequestToken(of result: NWBrowser.Result) -> String? {
-        if case .bonjour(let txt) = result.metadata { return txt["cr"] }
+        if case .bonjour(let txt) = result.metadata { return txt[ReceiverConnectRequestTXT.token] }
+        return nil
+    }
+
+    /// The sender this receiver's Connect was meant for (TXT `crt`), nil on
+    /// receivers that predate targeting.
+    private func connectRequestTarget(of result: NWBrowser.Result) -> String? {
+        if case .bonjour(let txt) = result.metadata { return txt[ReceiverConnectRequestTXT.target] }
         return nil
     }
 
@@ -1838,6 +1845,14 @@ final class SenderController: ObservableObject {
             handledConnectRequestTokens[peerID] = token
             guard isPaired(result) else {
                 Log.info("connectDebug: receiverConnectRequestRejected reason=untrustedPeer")
+                continue
+            }
+            // A Connect names the sender its receiver's user tapped. Another
+            // paired sender (a Linux host, or a second Mac) must not dial and
+            // briefly replace the session that was actually asked for.
+            guard ReceiverConnectRequestTargeting.addressed(to: TrustStore.shared.installID(),
+                                                             target: connectRequestTarget(of: result)) else {
+                Log.info("connectDebug: receiverConnectRequestRejected reason=addressedToAnotherSender")
                 continue
             }
             Log.info("connectDebug: receiverConnectRequestAccepted peer=\(peerID)")
