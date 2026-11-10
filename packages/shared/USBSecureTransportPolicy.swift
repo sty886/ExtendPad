@@ -23,4 +23,16 @@ enum USBSecureTransportPolicy {
         guard let peerID = installIDByUDID[udid], let pinData = pin(peerID) else { return nil }
         return Resolved(peerID: peerID, pin: pinData)
     }
+
+    /// The UDID to offer/dial for [peerID], and only while that device is
+    /// attached right now. The persisted mapping outlives the cable: dialing it
+    /// after the device is gone fails with "adb: device not found" and, worse,
+    /// the doomed session owns the peer so the routes that would work are
+    /// skipped. Among several attached UDIDs the lowest serial is deterministic.
+    static func attachedUDID(peerID: String, installIDByUDID: [String: String],
+                             attachedUDIDs: Set<String>) -> String? {
+        installIDByUDID
+            .filter { $0.value == peerID && attachedUDIDs.contains($0.key) }
+            .keys.sorted().first
+    }
 }
