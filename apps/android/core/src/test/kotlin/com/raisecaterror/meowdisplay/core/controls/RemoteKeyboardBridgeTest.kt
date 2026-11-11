@@ -73,6 +73,21 @@ class RemoteKeyboardBridgeTest {
     }
 
     @Test
+    fun aHardwareKeyIsARealHIDPressNotCommittedText() {
+        // The Mac's input source must see the keystrokes: a Pinyin IME cannot compose
+        // letters that arrive as finished Unicode text.
+        keyboard.keyPress(4, listOf("shift"))
+        keyboard.keyPress(44, listOf("control"))
+        assertEquals(
+            listOf(
+                """{"type":"keyboard","action":"press","usage":4,"modifiers":["shift"]}""",
+                """{"type":"keyboard","action":"press","usage":44,"modifiers":["control"]}""",
+            ),
+            sent,
+        )
+    }
+
+    @Test
     fun onlyNavigationKeysAreHeldAndOneDownPerPressIsSent() {
         assertFalse("letters are typed, not held", keyboard.keyDown(4, emptyList()))
         assertTrue(keyboard.keyDown(RemoteKeyboardBridge.LEFT, listOf("shift")))

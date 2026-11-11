@@ -114,7 +114,11 @@ class USBAccess(
             // admission (for example the Linux sender on Wi-Fi) must not clear
             // a USB request that is still waiting for its own Mac.
             media.ui.collect { ui ->
-                if (ui.admitted && ui.peerID == pendingMac.value) pendingMac.value = null
+                if (ui.admitted && ui.peerID == pendingMac.value) {
+                    pendingMac.value = null
+                    // A later attempt succeeded: drop the stale "check the cable" notice.
+                    lastError.value = null
+                }
             }
         }
         registerPermissionReceiver()
@@ -164,23 +168,25 @@ class USBAccess(
         lastError.value = null
         pendingMac.value = peerID
         media.markRemoteConnect(peerID, mode)
-        val sent = if (link != null) {
-            sendAOA(USBHostRequest(USBAccessoryWire.VERSION, USBHostAction.Connect, peerID, localID()))
-        } else {
-            adbRequest(USBHostRequest(USBHostDiscoveryWire.VERSION, USBHostAction.Connect, peerID, localID())) != null
-        }
-        if (!sent) {
-            pendingMac.value = null
-            media.clearRemoteConnect(peerID)
-            if (link == null) {
-                // The route just failed to answer: withdraw it instead of leaving
-                // "USB available" on a Mac that can no longer be reached over USB.
-                availability.clear()
-                lastError.value = "USB connection request failed. Check the cable and that the Mac app is open."
-            }
-            return
-        }
         scope.launch {
+            val sent = if (link != null) {
+                sendAOA(USBHostRequest(USBAccessoryWire.VERSION, USBHostAction.Connect, peerID, localID()))
+            } else {
+                adbRequestWithRetry(
+                    USBHostRequest(USBHostDiscoveryWire.VERSION, USBHostAction.Connect, peerID, localID())
+                ) != null
+            }
+            if (!sent) {
+                pendingMac.value = null
+                media.clearRemoteConnect(peerID)
+                if (link == null) {
+                    // The route just failed to answer: withdraw it instead of leaving
+                    // "USB available" on a Mac that can no longer be reached over USB.
+                    availability.clear()
+                    lastError.value = "USB connection request failed. Check the cable and that the Mac app is open."
+                }
+                return@launch
+            }
             delay(REQUEST_TIMEOUT_MS)
             if (!pendingMac.compareAndSet(peerID, null)) return@launch
             media.clearRemoteConnect(peerID)
@@ -197,20 +203,22 @@ class USBAccess(
         if (pendingMac.value != null) return
         lastError.value = null
         pendingMac.value = peerID
-        val sent = if (link != null) {
-            sendAOA(USBHostRequest(USBAccessoryWire.VERSION, USBHostAction.Pair, peerID, localID()))
-        } else {
-            adbRequest(USBHostRequest(USBHostDiscoveryWire.VERSION, USBHostAction.Pair, peerID, localID())) != null
-        }
-        if (!sent) {
-            pendingMac.value = null
-            if (link == null) {
-                availability.clear()
-                lastError.value = "USB pairing request failed. Check the cable and that the Mac app is open."
-            }
-            return
-        }
         scope.launch {
+            val sent = if (link != null) {
+                sendAOA(USBHostRequest(USBAccessoryWire.VERSION, USBHostAction.Pair, peerID, localID()))
+            } else {
+                adbRequestWithRetry(
+                    USBHostRequest(USBHostDiscoveryWire.VERSION, USBHostAction.Pair, peerID, localID())
+                ) != null
+            }
+            if (!sent) {
+                pendingMac.value = null
+                if (link == null) {
+                    availability.clear()
+                    lastError.value = "USB pairing request failed. Check the cable and that the Mac app is open."
+                }
+                return@launch
+            }
             delay(PAIR_REQUEST_TIMEOUT_MS)
             if (!pendingMac.compareAndSet(peerID, null)) return@launch
             // Pairing shows its own code prompt; getting this far without one
@@ -248,12 +256,12 @@ class USBAccess(
     }
 
     /** The original v1 request/response round trip through adb's reverse tunnel. Null = host unavailable. */
-    private fun adbRequest(request: USBHostRequest): USBHostAdvertisement? = try {
+    private fun adbRequest(request: USBHostRequest, timeoutMs: Int = 1_200): USBHostAdvertisement? = try {
         Socket().use { socket ->
             // IPv4 explicitly: adb's reverse listener is 127.0.0.1; getLoopbackAddress()
             // can resolve to ::1, where nothing is listening.
-            socket.connect(InetSocketAddress(InetAddress.getByName("127.0.0.1"), USBHostDiscoveryWire.PORT), 1_200)
-            socket.soTimeout = 1_200
+            socket.connect(InetSocketAddress(InetAddress.getByName("127.0.0.1"), USBHostDiscoveryWire.PORT), timeoutMs)
+            socket.soTimeout = timeoutMs
             socket.outputStream.write(USBHostDiscoveryWire.frame(request))
             socket.outputStream.flush()
             val input = DataInputStream(socket.inputStream)
@@ -266,8 +274,19 @@ class USBAccess(
             USBHostDiscoveryWire.advertisement(body)
         }
     } catch (e: Exception) {
-        Log.d(TAG, "USB host unavailable over ADB: ${e.message}")
+        Log.d(TAG, "USB host unavailable over ADB: ${e.javaClass.simpleName} ${e.message}")
         null
+    }
+
+    /**
+     * A Connect/Pair request can lose the first round trip while the reverse tunnel or the
+     * Mac's main actor is busy (the periodic Discover polls recover a moment later). Give it a
+     * longer deadline and one fresh socket before telling the person the cable is bad.
+     */
+    private fun adbRequestWithRetry(request: USBHostRequest): USBHostAdvertisement? {
+        adbRequest(request, ADB_CONNECT_TIMEOUT_MS)?.let { return it }
+        Thread.sleep(ADB_RETRY_DELAY_MS)
+        return adbRequest(request, ADB_CONNECT_TIMEOUT_MS)
     }
 
     // MARK: - AOA accessory
@@ -458,5 +477,12 @@ class USBAccess(
         const val REQUEST_TIMEOUT_MS = 30_000L
         /** The Mac starts the pairing ceremony within a few seconds; by 65 s it never did. */
         const val PAIR_REQUEST_TIMEOUT_MS = 65_000L
+        /**
+         * Connect/Pair gets a longer deadline than a Discover poll: the Mac answers on its
+         * main actor, and the first reverse-tunnel round trip can lose a race with a Mac that
+         * is busy. A 1.2 s deadline made a healthy USB route report "check the cable".
+         */
+        const val ADB_CONNECT_TIMEOUT_MS = 2_500
+        const val ADB_RETRY_DELAY_MS = 250L
     }
 }

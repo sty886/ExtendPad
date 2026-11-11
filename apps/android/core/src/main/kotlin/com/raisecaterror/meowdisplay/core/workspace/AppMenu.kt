@@ -231,6 +231,166 @@ class AppMenuModel(
     private fun nextReq(): Int { req = if (req >= 1_000_000_000) 1 else req + 1; return req }
 }
 
+// MARK: - The streamed display's menu bar (PROTOCOL.md 6.18)
+
+/** In Mirror/Extend the receiver draws the menu bar's drop-downs; the Mac reads and presses them. */
+object BarMenuWire {
+    const val FEATURE = "barMenus"
+    const val HEIGHT_FIELD = "barMenuHeight"
+    const val REQUEST = "barMenuRequest"
+    const val MENU = "barMenu"
+    const val PRESS = "barMenuPress"
+    const val RESULT = "barMenuResult"
+
+    fun read(x: Double, y: Double, path: List<Int>, req: Int) = buildJsonObject {
+        put("type", REQUEST); put("x", x); put("y", y); put("path", ints(path)); put("req", req)
+    }
+
+    fun press(path: List<Int>, titles: List<String>, req: Int) = buildJsonObject {
+        put("type", PRESS); put("path", ints(path))
+        put("titles", buildJsonArray { titles.forEach { add(JsonPrimitive(it)) } }); put("req", req)
+    }
+
+    private fun ints(list: List<Int>) = buildJsonArray { list.forEach { add(JsonPrimitive(it)) } }
+}
+
+data class BarMenuReply(
+    val path: List<Int>, val app: String, val title: String?, val items: List<AppMenuEntry>,
+    val ok: Boolean, val native: Boolean, val error: String?, val req: Int?,
+    /** The menu bar as a fraction of the streamed display, when the Mac included it. */
+    val height: Double? = null,
+) {
+    companion object {
+        fun parse(obj: JsonObject): BarMenuReply {
+            val path = (obj["path"] as? JsonArray).orEmpty().take(8).mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.intOrNull }
+            val items = (obj["items"] as? JsonArray).orEmpty().take(160).mapNotNull { it as? JsonObject }.mapNotNull { o ->
+                val i = o.i("i")?.takeIf { it in 0 until 500 } ?: return@mapNotNull null
+                if (o.b("sep") == true) return@mapNotNull AppMenuEntry(i, "", separator = true)
+                val t = o.s("t")?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                AppMenuEntry(i, t.take(120), o.b("on") != false, o.b("mark") == true, false, o.b("sub") == true, o.s("key")?.take(12))
+            }
+            val height = (obj["height"] as? JsonPrimitive)?.takeIf { !it.isString }?.content?.toDoubleOrNull()
+                ?.takeIf { it in 0.005..0.2 }
+            return BarMenuReply(path, obj.s("app")?.take(80).orEmpty(), obj.s("title")?.take(120), items,
+                obj.b("ok") != false, obj.b("native") == true, obj.s("error")?.take(32), obj.i("req"), height)
+        }
+    }
+}
+
+data class BarMenuUi(
+    /** The Mac offers receiver-drawn menu bar menus (`welcome` feature `barMenus`). */
+    val available: Boolean = false,
+    /** The menu bar as a fraction of the streamed display's height (30/800 when absent). */
+    val heightFraction: Double = 30.0 / 800.0,
+    /** The tapped title as a fraction of the picture's width; the drop-down is anchored there. */
+    val anchorX: Double = 0.0,
+    val app: String = "",
+    /** The open menu, then any submenus. Empty while closed. */
+    val open: List<AppMenuLevel> = emptyList(),
+    val failed: String? = null,
+)
+
+/** The streamed display's menu bar. Main thread only. */
+class BarMenuModel(
+    private val send: (JsonObject) -> Boolean,
+    /** The Mac answered `native`: send the original touch so its AppKit menu opens. */
+    private val onNative: (x: Double, y: Double) -> Unit = { _, _ -> },
+) {
+    private val state = MutableStateFlow(BarMenuUi())
+    val ui: StateFlow<BarMenuUi> = state.asStateFlow()
+
+    private var req = 0
+    private var levelReq: Int? = null
+    private var anchorX = 0.0
+    private var anchorY = 0.0
+
+    fun setAvailable(value: Boolean, height: Double?) {
+        state.update {
+            it.copy(
+                available = value,
+                heightFraction = height?.takeIf { h -> h in 0.005..0.2 } ?: it.heightFraction,
+            )
+        }
+        if (!value) close()
+    }
+
+    /** The user tapped the menu bar at [x]/[y], both normalized inside the streamed picture. */
+    fun request(x: Double, y: Double) {
+        if (!state.value.available) return
+        anchorX = x
+        anchorY = y
+        state.update { it.copy(anchorX = x, open = emptyList(), failed = null) }
+        val r = nextReq()
+        levelReq = r
+        send(BarMenuWire.read(x, y, emptyList(), r))
+    }
+
+    fun openSubmenu(e: AppMenuEntry) {
+        val level = state.value.open.lastOrNull() ?: return
+        if (!e.hasSubmenu || !e.enabled) return
+        val path = level.path + e.index
+        state.update { it.copy(open = it.open + AppMenuLevel(path, level.titles + e.title, e.title)) }
+        val r = nextReq()
+        levelReq = r
+        send(BarMenuWire.read(anchorX, anchorY, path, r))
+    }
+
+    fun back() {
+        if (state.value.open.size > 1) { levelReq = null; state.update { it.copy(open = it.open.dropLast(1)) } } else close()
+    }
+
+    fun close() { levelReq = null; state.update { it.copy(open = emptyList(), failed = null) } }
+
+    fun press(e: AppMenuEntry) {
+        val level = state.value.open.lastOrNull() ?: return
+        if (!e.enabled || e.separator || e.hasSubmenu) return
+        send(BarMenuWire.press(level.path + e.index, level.titles + e.title, nextReq()))
+        close()
+    }
+
+    fun apply(r: BarMenuReply) {
+        if (r.req != null && r.req != levelReq) return
+        if (r.native) {
+            close()
+            onNative(anchorX, anchorY)
+            return
+        }
+        if (!r.ok) {
+            val open = state.value.open
+            state.update { st ->
+                if (open.isEmpty()) st.copy(failed = r.error ?: "unavailable")
+                else st.copy(open = st.open.mapIndexed { i, l ->
+                    if (i == st.open.lastIndex) l.copy(loading = false, error = r.error ?: "unavailable") else l
+                })
+            }
+            return
+        }
+        val title = r.title ?: r.app
+        state.update { st ->
+            val index = st.open.indexOfLast { it.path == r.path }
+            val open = if (index >= 0) {
+                // A submenu keeps the title the receiver already shows; only its items change.
+                st.open.mapIndexed { i, l ->
+                    if (i == index) l.copy(items = r.items, loading = false, error = null) else l
+                }
+            } else {
+                st.open + AppMenuLevel(r.path, listOf(title), title, r.items, loading = false)
+            }
+            st.copy(
+                app = r.app.ifEmpty { st.app },
+                heightFraction = r.height ?: st.heightFraction,
+                open = open,
+            )
+        }
+    }
+
+    fun applyResult(ok: Boolean, error: String?) {
+        if (!ok) state.update { it.copy(failed = error ?: "changed") }
+    }
+
+    private fun nextReq(): Int { req = if (req >= 1_000_000_000) 1 else req + 1; return req }
+}
+
 private fun JsonObject.s(k: String): String? = (this[k] as? JsonPrimitive)?.takeIf { it.isString }?.content
 private fun JsonObject.i(k: String): Int? = (this[k] as? JsonPrimitive)?.takeIf { !it.isString }?.intOrNull
 private fun JsonObject.b(k: String): Boolean? = (this[k] as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull

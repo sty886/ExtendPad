@@ -176,6 +176,20 @@ final class ExtendDisplayShapeTests: XCTestCase {
 
     // MARK: - Per-peer persistence
 
+    func testAbsurdPanelGeometryIsCappedBeforeVirtualDisplayMath() {
+        // A hostile `hello` can announce any Int. `VirtualDisplay` converts
+        // points to UInt32 and Swift traps on overflow, so the sizing layer
+        // must cap both axes before that.
+        let size = ExtendDisplaySizing.pointSize(
+            receiverPixelsWide: 9_000_000_000_000_000_000,
+            receiverPixelsHigh: 1,
+            aspect: 16.0 / 10.0)
+        XCTAssertLessThanOrEqual(size.wide, ExtendDisplaySizing.maxAxisPoints)
+        XCTAssertLessThanOrEqual(size.high, ExtendDisplaySizing.maxAxisPoints)
+        XCTAssertGreaterThanOrEqual(size.wide, 2)
+        XCTAssertGreaterThanOrEqual(size.high, 2)
+    }
+
     func testPerPeerPersistenceDoesNotBleedBetweenPeers() {
         let peerA = "test.extendshape.peerA.\(UUID().uuidString)"
         let peerB = "test.extendshape.peerB.\(UUID().uuidString)"

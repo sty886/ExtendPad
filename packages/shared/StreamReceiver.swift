@@ -2770,6 +2770,10 @@ final class StreamReceiver: ObservableObject {
         case WireMessage.textCaret:
             applyTextCaret(obj)
         case "cursorImg":
+            // Cursor position/sprite are screen content, like the video. A
+            // pinned Mac that has not been admitted does not get to draw on
+            // this receiver's UI (Android enforces the same rule).
+            guard sessionAdmission.admitted else { return }
             guard let b64 = obj["png"] as? String,
                   let png = Data(base64Encoded: b64),
                   let source = CGImageSourceCreateWithData(png as CFData, nil),
@@ -2995,6 +2999,7 @@ final class StreamReceiver: ObservableObject {
     }
 
     private func applyCursor(_ obj: [String: Any]) {
+        guard sessionAdmission.admitted else { return }
         if let seq = (obj["s"] as? NSNumber)?.uint64Value {
             guard seq > lastCursorSeq else { return }
             lastCursorSeq = seq
@@ -3023,6 +3028,7 @@ final class StreamReceiver: ObservableObject {
     /// reordered ones (sequence not newer) are dropped; the main actor gets
     /// the rectangle, or nil for "no caret".
     private func applyTextCaret(_ obj: [String: Any]) {
+        guard sessionAdmission.admitted else { return }
         guard let update = TextCaretWire.parse(obj) else { return }
         if let seq = update.sequence {
             guard seq > lastTextCaretSeq else { return }

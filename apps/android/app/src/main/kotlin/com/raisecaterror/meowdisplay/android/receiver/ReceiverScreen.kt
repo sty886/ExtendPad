@@ -9,6 +9,7 @@ import com.raisecaterror.meowdisplay.core.workspace.WRect
 import com.raisecaterror.meowdisplay.core.workspace.WHinge
 import com.raisecaterror.meowdisplay.core.workspace.WSize
 import com.raisecaterror.meowdisplay.core.session.DisplayMode
+import com.raisecaterror.meowdisplay.android.receiver.workspace.BarMenuOverlay
 import com.raisecaterror.meowdisplay.android.receiver.workspace.RemoteFinderOverlay
 import com.raisecaterror.meowdisplay.android.receiver.workspace.StagePeekOverlay
 import com.raisecaterror.meowdisplay.android.receiver.workspace.WindowModePrompt
@@ -349,6 +350,22 @@ fun ReceiverScreen(
         localTouchRipples.forEach { ripple ->
             androidx.compose.runtime.key(ripple.id) {
                 DirectTouchRipple(ripple, Modifier.fillMaxSize()) { localTouchRipples.remove(ripple) }
+            }
+        }
+        // Extend/Mirror: the native menu bar is in the picture, but its drop-downs are drawn
+        // here because macOS anchors a windowless Finder's menus to the main display
+        // (PROTOCOL.md 6.18). Window mode has the pane menu bar instead.
+        if (!pictureInPicture && workspace != null) {
+            val wsUi by workspace.ui.collectAsState()
+            val barUi by workspace.barMenus.ui.collectAsState()
+            if (!wsUi.windowMode && state.inputAllowed && barUi.available) {
+                BarMenuOverlay(
+                    model = workspace.barMenus,
+                    ui = barUi,
+                    frame = frame,
+                    screenWidthDp = widthDp.toDouble(),
+                    screenHeightDp = heightDp.toDouble(),
+                )
             }
         }
         if (pictureInPicture) return@BoxWithConstraints

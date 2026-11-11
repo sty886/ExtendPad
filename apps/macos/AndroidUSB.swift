@@ -84,7 +84,7 @@ enum AndroidUSB {
     }
 
     @discardableResult
-    private static func run(_ arguments: [String]) throws -> String {
+    private static func run(_ arguments: [String], timeout: TimeInterval = 4) throws -> String {
         guard let adb = adbURL() else { throw Failure.adbUnavailable }
         let process = Process()
         let output = Pipe()
@@ -92,12 +92,20 @@ enum AndroidUSB {
         process.arguments = arguments
         process.standardOutput = output
         process.standardError = output
+        let finished = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in finished.signal() }
         do {
             try process.run()
         } catch {
             throw Failure.commandFailed(error.localizedDescription)
         }
-        process.waitUntilExit()
+        if finished.wait(timeout: .now() + timeout) == .timedOut {
+            // A stuck adb server must not strand the USB watcher forever: it would leave the
+            // Mac advertising nothing while the tablet keeps asking to connect.
+            process.terminate()
+            _ = finished.wait(timeout: .now() + 1)
+            throw Failure.commandFailed("adb timed out after \(Int(timeout))s")
+        }
         let data = output.fileHandleForReading.readDataToEndOfFile()
         let text = String(data: data, encoding: .utf8) ?? ""
         guard process.terminationStatus == 0 else {
@@ -125,11 +133,26 @@ enum AndroidUSB {
     }
 
     private static func connectedDevicesSync(preparedSerial: String?) -> (devices: [AndroidUSBDevice], preparedSerial: String?) {
-        guard adbURL() != nil, let output = try? run(["devices", "-l"]) else { return ([], nil) }
+        guard adbURL() != nil else {
+            Log.info("androidUSB: adb not found")
+            return ([], nil)
+        }
+        let output: String
+        do {
+            output = try run(["devices", "-l"])
+        } catch {
+            Log.info("androidUSB: adb devices failed: \(error.localizedDescription)")
+            return ([], nil)
+        }
         // Host port 9001/9002 can forward to only one Android device. Refuse
         // to guess among several tablets rather than risk pairing the wrong one.
         let devices = parseDevices(output)
-        guard devices.count == 1, let device = devices.first else { return ([], nil) }
+        guard devices.count == 1, let device = devices.first else {
+            if !devices.isEmpty {
+                Log.info("androidUSB: \(devices.count) devices attached; refusing to guess")
+            }
+            return ([], nil)
+        }
         guard tunnelNeedsRefresh(serial: device.serial, preparedSerial: preparedSerial) else {
             return ([device], device.serial)
         }
@@ -173,6 +196,14 @@ enum AndroidUSB {
 final class AndroidUSBDeviceWatcher {
     private let onChange: ([USBDevice]) -> Void
     private var task: Task<Void, Never>?
+    private var lastDeviceCount = -1
+    /// The last device list, kept through a short empty streak. adb drops the device for a few
+    /// seconds while an Android session is torn down; reporting that as an unplug removes the
+    /// USB route from the tablet and lets Auto-Connect start a spurious session behind a
+    /// deliberate Disconnect.
+    private var lastDevices: [AndroidUSBDevice] = []
+    private var emptyPolls = 0
+    private static let emptyPollGrace = 2
 
     init(onChange: @escaping ([USBDevice]) -> Void) {
         self.onChange = onChange
@@ -185,9 +216,25 @@ final class AndroidUSBDeviceWatcher {
                 // server restart) instead of waiting for the device serial to change.
                 if ticks % 20 == 0 { preparedSerial = nil }
                 ticks += 1
-                let result = await AndroidUSB.connectedDevices(preparedSerial: preparedSerial)
+                var result = await AndroidUSB.connectedDevices(preparedSerial: preparedSerial)
+                guard let self else { return }
+                if result.devices.isEmpty, !self.lastDevices.isEmpty, self.emptyPolls < Self.emptyPollGrace {
+                    self.emptyPolls += 1
+                    result = (devices: self.lastDevices, preparedSerial: preparedSerial)
+                    Log.info("androidUSB: keeping last device through empty poll \(self.emptyPolls)/\(Self.emptyPollGrace)")
+                } else if result.devices.isEmpty {
+                    self.emptyPolls = 0
+                    self.lastDevices = []
+                } else {
+                    self.emptyPolls = 0
+                    self.lastDevices = result.devices
+                }
+                if result.devices.isEmpty || preparedSerial != result.preparedSerial || result.devices.count != self.lastDeviceCount {
+                    Log.info("androidUSB: watcher devices=\(result.devices.count) prepared=\(result.preparedSerial ?? "-")")
+                }
                 preparedSerial = result.preparedSerial
-                self?.onChange(result.devices.map(AndroidUSB.asUSBDevice))
+                self.lastDeviceCount = result.devices.count
+                self.onChange(result.devices.map(AndroidUSB.asUSBDevice))
                 try? await Task.sleep(for: .seconds(3))
             }
         }

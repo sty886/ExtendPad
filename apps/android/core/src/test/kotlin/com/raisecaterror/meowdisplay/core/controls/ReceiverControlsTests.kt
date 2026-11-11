@@ -600,6 +600,24 @@ class ReceiverControlsTests {
         assertTrue(FunctionTrayProfile.isBuiltIn("return"))
     }
 
+    /**
+     * The opt-in Input Source action is macOS's "Select the previous input source":
+     * Control-Space. It is what lets a hardware keyboard switch the Mac between
+     * Chinese and English while its keys are HID presses the Mac's IME can compose.
+     */
+    @Test
+    fun testInputSourceIsControlSpaceAndOptIn() {
+        val configuration = FunctionTrayProfile.canonical().items.first { it.id == "input-source" }
+        val item = configuration.resolvedItem
+        assertFalse("opt-in: not on the default tray", configuration.isVisible)
+        assertTrue(FunctionTrayProfile.isBuiltIn("input-source"))
+        assertEquals("中/英", item.displayKey)
+        assertEquals(
+            listOf<ControlActionOperation>(ControlActionOperation.Press(44, listOf("control"))),
+            ControlActionPlan.operations(item.action),
+        )
+    }
+
     // testReturnPressPicksUpLatchedModifiersOnTheMac: left out, it needs HIDKeyUsage, KeyModifier and HeldModifierTracker
     // (Mac/InputRouting.swift, CGEventFlags), which exist only for Mac event injection.
 
@@ -698,7 +716,7 @@ class ReceiverControlsTests {
         assertEquals(listOf("zoom-in", "zoom-out", "undo", "redo"), profile.visibleItems.map { it.id })
         assertEquals(listOf(0, 0, 1, 1, 2, 2, 2, 2), profile.items.map { it.group })
         val today = FunctionTrayProfile.canonical()
-        today.items = today.items.filter { it.id != "return" }
+        today.items = today.items.filter { it.id != "return" && it.id != "input-source" }
         assertEquals(today, profile)
     }
 
@@ -775,9 +793,9 @@ class ReceiverControlsTests {
 
             val loaded = repository.load()
             val migrated = loaded.functionTrayProfile(ControlProfileSlot.Profile2)
-            assertEquals(name, tray.items, migrated.items.dropLast(1))
-            assertEquals(name, "return", migrated.items.lastOrNull()?.id)
-            assertEquals(name, false, migrated.items.lastOrNull()?.isVisible)
+            assertEquals(name, tray.items, migrated.items.dropLast(2))
+            assertEquals(name, listOf("return", "input-source"), migrated.items.takeLast(2).map { it.id })
+            assertEquals(name, listOf(false, false), migrated.items.takeLast(2).map { it.isVisible })
             assertEquals(name, tray.visibleItems, migrated.visibleItems)
             assertEquals(name, FunctionTrayProfile.canonical(ControlProfileSlot.Default), loaded.functionTrayProfile(ControlProfileSlot.Default))
             assertEquals(name, FunctionTrayProfile.canonical(ControlProfileSlot.Profile1), loaded.functionTrayProfile(ControlProfileSlot.Profile1))
@@ -793,8 +811,12 @@ class ReceiverControlsTests {
         moved.moveItems(setOf(4), 0)
         // A pre-release build appended it hidden to a v1.20.0 tray.
         val appended = v1_20FunctionTrayProfile(ControlProfileSlot.Profile2)
-        val returnItem = FunctionTrayProfile.canonical().items.first { it.id == "return" }
-        appended.items = appended.items + FunctionTrayItemConfiguration(returnItem.item, false, returnItem.group)
+        val canonical = FunctionTrayProfile.canonical()
+        val returnItem = canonical.items.first { it.id == "return" }
+        val inputSourceItem = canonical.items.first { it.id == "input-source" }
+        appended.items = appended.items +
+            FunctionTrayItemConfiguration(returnItem.item, false, returnItem.group) +
+            FunctionTrayItemConfiguration(inputSourceItem.item, false, inputSourceItem.group)
         for (profile in listOf(hidden, moved, appended)) {
             assertEquals("${profile.slot}", profile, profile.resolvingCanonicalMetadata())
         }

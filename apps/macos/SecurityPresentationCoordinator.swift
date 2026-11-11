@@ -323,6 +323,11 @@ private struct PairingPanelView: View {
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
                     Text(pending.sas).font(.system(.title, design: .monospaced)).bold()
+                    // The name above is self-chosen by the peer; this short
+                    // ID comes from its actual TLS key, so a spoofed name
+                    // cannot be the only thing on the prompt.
+                    Text("Device ID \(TrustStore.shortID(spki: pending.peerSPKI))")
+                        .font(.caption.monospaced()).foregroundStyle(.secondary)
                     VStack(spacing: 2) {
                         Text(PairingCopy.sasTitle).font(.subheadline.weight(.semibold))
                         Text(PairingCopy.sasHelper).font(.caption).foregroundStyle(.secondary)

@@ -73,13 +73,29 @@ final class PairingAbortSlot: @unchecked Sendable {
 /// authenticated abort ends the attempt immediately, even while the SAS is on
 /// screen. A frame that claims to be an abort but fails authentication ends the
 /// attempt as malformed (it is never trusted).
+///
+/// The pump is deliberately bounded: once both hellos are done the only
+/// legitimate frames are `confirmation`, `commit` and `commitAck` (plus an
+/// authenticated `abort`). Anything else is a protocol violation, and more
+/// than `maxBufferedFrames` of them before the local decision is a flood —
+/// an unauthenticated peer must not be able to grow memory by streaming
+/// frames while the SAS prompt is on screen.
 final class PairingFramePump: @unchecked Sendable {
+    /// Frames buffered while `PairingSessionCore` waits on the local decision.
+    /// A real peer sends at most one confirmation before that decision.
+    static let maxBufferedFrames = 4
+    private static let postHelloKinds: Set<PairingEnvelope.Kind> = [.confirmation, .commit, .commitAck]
+
     let peerAborted = PairingFlag()
     private var iterator: AsyncThrowingStream<PairingEnvelope, Error>.Iterator
 
     init(transport: PairingTransport, result: PairingResult, onPeerAbort: @escaping @Sendable () -> Void) {
         var continuation: AsyncThrowingStream<PairingEnvelope, Error>.Continuation!
-        let stream = AsyncThrowingStream<PairingEnvelope, Error> { continuation = $0 }
+        // `.bufferingOldest` plus the yield-result check below turns an
+        // overrun into a failed attempt instead of unbounded growth.
+        let stream = AsyncThrowingStream<PairingEnvelope, Error>(
+            bufferingPolicy: .bufferingOldest(Self.maxBufferedFrames)
+        ) { continuation = $0 }
         iterator = stream.makeAsyncIterator()
         let cont = continuation!
         let aborted = peerAborted
@@ -97,7 +113,27 @@ final class PairingFramePump: @unchecked Sendable {
                         }
                         return
                     }
-                    cont.yield(envelope)
+                    // After the hello ceremony these are the only legitimate
+                    // kinds. Rejecting the rest immediately stops a flood
+                    // before it reaches the buffer at all.
+                    guard Self.postHelloKinds.contains(envelope.kind) else {
+                        cont.finish(throwing: PairingError.malformedMessage)
+                        return
+                    }
+                    switch cont.yield(envelope) {
+                    case .enqueued:
+                        break
+                    case .dropped:
+                        cont.finish(throwing: PairingError.tooManyAttempts)
+                        return
+                    case .terminated:
+                        return
+                    @unknown default:
+                        // A future buffering outcome must fail closed rather
+                        // than silently keep reading an unbounded flood.
+                        cont.finish(throwing: PairingError.malformedMessage)
+                        return
+                    }
                 }
             } catch { cont.finish(throwing: error) }
         }

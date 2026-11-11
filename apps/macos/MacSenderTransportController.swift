@@ -393,7 +393,12 @@ final class MacSenderTransportController: @unchecked Sendable {
         var candidates: [NWEndpoint.Host] = []
         var linkLocal: [NWEndpoint.Host] = []
         let scopes = Self.candidateInterfaceNames()
-        for addr in peerAddrs {
+        for addr in peerAddrs.prefix(32) {
+            // `hello.addrs` is peer-supplied. Only literal addresses are
+            // probed: a hostname would let a paired receiver make this Mac
+            // resolve and dial arbitrary DNS names with its client
+            // certificate. The route is still only a hint; the pin decides.
+            guard IPv4Address(addr) != nil || IPv6Address(addr) != nil else { continue }
             if addr.lowercased().hasPrefix("fe80:") {
                 for iface in scopes {
                     linkLocal.append(NWEndpoint.Host("\(addr)%\(iface)"))

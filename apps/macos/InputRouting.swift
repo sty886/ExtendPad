@@ -18,11 +18,42 @@ enum InputTargetResolver {
     }
 }
 
+/// Clamps untrusted wire numbers before they reach geometry or CGEvent math.
+/// Swift traps on an out-of-range `Double`→`Int` conversion, so every value
+/// that can end up as an integer must pass through one of these first.
+enum InputSanitizer {
+    /// A normalized video coordinate: finite and inside 0...1, else nil.
+    static func unit(_ value: Double?) -> Double? {
+        guard let value, value.isFinite else { return nil }
+        return min(max(value, 0), 1)
+    }
+
+    /// A finite delta bounded to ±[limit], else nil.
+    static func finite(_ value: Double?, limit: Double) -> Double? {
+        guard let value, value.isFinite else { return nil }
+        return min(max(value, -limit), limit)
+    }
+
+    /// Tablet pressure: finite and inside 0...1.
+    static func pressure(_ value: Double) -> Double {
+        value.isFinite ? min(max(value, 0), 1) : 0
+    }
+
+    /// NSEvent/CGEvent click state: one, two or three clicks.
+    static func clickCount(_ value: Int?) -> Int {
+        min(max(value ?? 1, 1), 3)
+    }
+}
+
 enum InputCoordinateMapper {
     /// Map top-left-origin normalized video coordinates into global CG bounds.
+    /// Out-of-range or non-finite input is clamped: a remote peer must never
+    /// be able to place the pointer outside the display it was shown.
     static func point(x: Double, y: Double, in bounds: CGRect) -> CGPoint {
-        CGPoint(x: bounds.minX + x * bounds.width,
-                y: bounds.minY + y * bounds.height)
+        let cx = x.isFinite ? min(max(x, 0), 1) : 0
+        let cy = y.isFinite ? min(max(y, 0), 1) : 0
+        return CGPoint(x: bounds.minX + cx * bounds.width,
+                       y: bounds.minY + cy * bounds.height)
     }
 }
 
@@ -443,11 +474,24 @@ struct HeldKeyTracker {
 /// carried into the next event instead, so the total scrolled always matches
 /// the total sent. Single events still round to nearest, as before.
 struct ScrollRemainder {
+    /// A single wire scroll event is a user gesture, not a way to reach the
+    /// edges of Int64: far larger deltas are clamped. Without this, `Int(1e308)`
+    /// traps and a paired peer can crash the sender.
+    static let maxWholeDelta: Double = 1_000_000
+
     private(set) var x = 0.0
     private(set) var y = 0.0
 
     mutating func take(dxPoints: Double, dyPoints: Double) -> (dx: Int32, dy: Int32) {
-        let totalX = x + dxPoints, totalY = y + dyPoints
+        let rawX = x + dxPoints, rawY = y + dyPoints
+        // Non-finite (a hostile `1e308` delta summed with the remainder, or a
+        // non-finite parsed value) must not poison the remainder.
+        guard rawX.isFinite, rawY.isFinite else {
+            reset()
+            return (0, 0)
+        }
+        let totalX = min(max(rawX, -Self.maxWholeDelta), Self.maxWholeDelta)
+        let totalY = min(max(rawY, -Self.maxWholeDelta), Self.maxWholeDelta)
         let wholeX = totalX.rounded(), wholeY = totalY.rounded()
         x = totalX - wholeX
         y = totalY - wholeY

@@ -106,10 +106,15 @@ other end. It does not by itself admit a session:
   announced ID must be the device the Mac dialed, and its key must be that
   device's *current* pin — USB is held to exactly the same rule as the
   network.
-- **Connection approval never grants input.** Remote input needs the Mac's
-  Allow Input master switch, an admitted session, and a grant for the
-  current connection. Grants never carry over to a new connection; the
-  receiver asks again.
+- **Connection approval does not grant input by default.** Remote input needs
+  the Mac's Allow Input master switch, an admitted session, and a grant for
+  the current connection. The default Ask policy leaves a new session in View
+  Only; the receiver sends `allowInputRequest` and the Mac owner answers.
+  The one exception is a device the owner explicitly set to **Always Allow**
+  for this Mac: an admitted connection from that device may be granted input
+  as it opens, without a fresh prompt (the master switch and the on-console
+  check still apply). A grant never carries to another connection by itself;
+  the next connection is granted again under that policy or asked again.
 - **Forget and Block revoke.** They withdraw approval prompts still waiting
   for that device, end connections that are waiting to take over the
   session, and drop remembered acceptances; answering a prompt afterwards

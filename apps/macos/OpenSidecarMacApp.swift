@@ -1050,6 +1050,10 @@ final class SenderController: ObservableObject {
         return current.union(legacyWiFi).union(learnedInstallIDs)
     }())
     private var autoConnectWorkItem: DispatchWorkItem?
+    /// When every route for every receiver disappeared. Manual-disconnect suppression is only
+    /// forgotten after a genuinely long absence, never after the few-second USB/adb blip a
+    /// session teardown causes.
+    private var autoConnectUnavailableSince: Date?
     private var routeChoiceByPeer: [String: ConnectionRoute] =
         (UserDefaults.standard.dictionary(forKey: "routeChoiceByPeer.v1") as? [String: String] ?? [:])
             .compactMapValues(ConnectionRoute.init(rawValue:))
@@ -1598,12 +1602,13 @@ final class SenderController: ObservableObject {
         // Until its pinned handshake completes the caller is anyone who can
         // reach the port: it holds one of a few slots, for a few seconds.
         let slots = PreAuthSlots.remoteKnock
-        guard slots.tryAcquire() else {
+        let source = PairingNetwork.sourceKey(for: connection)
+        guard slots.tryAcquire(source: source) else {
             Log.info("remote connect-request: too many unauthenticated connections — closing this one")
             connection.cancel()
             return
         }
-        let slot = OneShotRelease { slots.release() }
+        let slot = OneShotRelease { slots.release(source: source) }
         DispatchQueue.main.asyncAfter(deadline: .now() + PreAuthSlots.deadline) {
             guard slot.isHeld else { return }
             Log.info("remote connect-request: handshake not completed in time — closing")
@@ -2439,8 +2444,23 @@ final class SenderController: ObservableObject {
         guard autoConnectEnabled, roleState.senderMayConnect else { return }
         dedupeSessions()
         let candidates = autoConnectCandidates
-        autoConnectPolicy.updateAvailableIdentifiers(
-            candidates.reduce(into: Set<String>()) { $0.formUnion($1.identifiers) })
+        let availableIdentifiers = candidates.reduce(into: Set<String>()) { $0.formUnion($1.identifiers) }
+        if availableIdentifiers.isEmpty {
+            // A receiver disappearing for a moment (adb drops a USB device for a few seconds
+            // while a session is torn down) is not a new availability cycle: clearing the
+            // suppression here would let Auto-Connect start a new USB session right after the
+            // person deliberately pressed Disconnect.
+            if let since = autoConnectUnavailableSince {
+                if Date().timeIntervalSince(since) >= 30 {
+                    autoConnectPolicy.updateAvailableIdentifiers([])
+                }
+            } else {
+                autoConnectUnavailableSince = Date()
+            }
+        } else {
+            autoConnectUnavailableSince = nil
+            autoConnectPolicy.updateAvailableIdentifiers(availableIdentifiers)
+        }
         var successfullyStartedLogicalIDs = Set<String>()
         for candidate in candidates {
             if successfullyStartedLogicalIDs.contains(candidate.logicalID) { continue }

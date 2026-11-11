@@ -1096,10 +1096,17 @@ MUST NOT 在接受之前呈现媒体。任何拒绝之后，发送端结束会�
 响应绝不会接纳较晚的连接。发送端自己对接收端发起请求的批准，以及任何
 拒绝，属于逻辑会话并延续。
 
-**输入按连接授予。** 接纳绝不授予输入。`allowInputState` 授权仅适用于
-`allowInputRequest` 到达的那条连接：每条新连接都以输入关闭开始（发送端在
-其 `hello` 之后用 `allowInputState` 说明），而 Mac 所有者针对较早连接所做
+**输入按连接授予。** 接纳本身不授予输入；默认策略下 `allowInputState` 授权仅
+适用于 `allowInputRequest` 到达的那条连接：每条新连接都以输入关闭开始（发送端
+在其 `hello` 之后用 `allowInputState` 说明），而 Mac 所有者针对较早连接所做
 的决定会被忽略。接收端用 `allowInputRequest` 再次请求。
+
+**官方 ExtendPad 扩展（Always Allow）。** 当 Mac 所有者在该 Mac 上把一台已配对
+设备显式设置为 *Always Allow* 时，官方 Mac 发送端可以在该设备的连接被接纳后
+主动发送 `allowInputState`（`allowed: true`、`state: "allowed"`），而无需等待
+`allowInputRequest`；Mac 主输入开关与“当前登录会话在控制台”的检查仍然生效。
+*Ask*（默认）与 *Never Allow* 不会触发该行为。该扩展不改变“输入授权属于具体
+连接”的规则：新连接仍会重新授予或重新询问，绝不继承上一条连接的授权。
 
 Forget 和 Block 是两端的撤销：它们结束仍在等待该对端的任何提示，而对其中
 一个的迟到答复既不会接纳会话，也不会存储政策。接收端还会丢弃其接受过的
@@ -1776,6 +1783,7 @@ sequenceDiagram
 | 2026-10-30 | 增量式：统一剪贴板（`clip`、`welcome.features` `"clipboard"`，6.15 节） |
 | 2026-11-07 | 增量式，无 `pv` 变更：任何 `keyboard` 动作可携带 `t`（接收端以发送端时钟表示的发送时间），用于输入延迟遥测 |
 | 2026-11-10 | 增量式，无 `pv` 变更：`_opensidecar._tcp` 的 `cr` Connect 令牌旁增加 `crt`（被点名的发送端 install id），使多台已配对发送端中只有被用户请求的那一台拨号（6.9 节） |
+| 2026-11-10 | 增量式，无 `pv` 变更：Mirror/Extend 的接收端绘制菜单栏（6.18 节）、`welcome.features` `barMenus`、`welcome.barMenuHeight`、`barMenuRequest`/`barMenu`/`barMenuPress`/`barMenuResult` |
 ### 6.16 锁定此 Mac (`lockMac` / `lockMacResult`) (Lock This Mac)
 
 当 Mac 的 `welcome.features` 列出 `lockMac` 时提供；在每种显示模式下都有效。
@@ -1819,6 +1827,46 @@ sequenceDiagram
   刷新 30 天后过期；Forget 会移除它。
 * **信任。** 地址只是路由提示。到它的每条连接都是通常的固定双向 TLS；
   报告绝不会创建、更改或批准配对。
+
+### 6.18 显示菜单栏 (`barMenuRequest` / `barMenu` / `barMenuPress` / `barMenuResult`) (Display menu bar)
+
+增量式，无 `pv` 变更。Mirror/Extend 中，接收端自己绘制流中菜单栏的下拉菜单；
+Mac 通过 Accessibility 读取前台应用的菜单，并在接收端按下时执行。
+
+**动机。** macOS 会把无窗口的 Finder 桌面菜单锚定到主显示器：扩展显示器上
+的菜单标题可见，但原生下拉窗口出现在主屏；该窗口无法被移动（AX 位置不可
+设置，私有 `CGSMoveWindow` 被拒绝）。因此原生菜单不能可靠地出现在接收端，
+接收端必须自己绘制下拉菜单。
+
+* **能力。** Mirror/Extend 会话中，Mac 在 `welcome.features` 中列出
+  `"barMenus"`，并可附带 `welcome.barMenuHeight`（菜单栏高度占流显示高度的
+  比例，例如 30/800 = `0.0375`）。Window 模式不使用本功能（6.13 节的窗格
+  菜单栏负责）。
+* **`barMenuRequest`**（接收端 -> Mac）：
+  `{"type":"barMenuRequest","x":0.25,"y":0.01875,"path":[],"req":1}`。
+  `x`/`y` 是流画面内的归一化坐标。`path` 为 `[]` 时，Mac 用前台应用的 AX
+  菜单栏标题的几何位置找到被点的标题；`[i]` 或 `[i,j…]` 读取该子菜单。需要
+  控制权限；读取菜单还需要 Mac 的辅助功能权限。
+* **`barMenu`**（Mac -> 接收端）：
+  `{"type":"barMenu","ok":true,"path":[3],"app":"Finder","title":"编辑","height":0.0375,"req":1,"items":[…]}`。
+  `items` 与 6.13 的菜单项格式相同。`height` 可选，接收端用它校准触摸条带
+  的高度。失败时为 `ok:false` 加 `error`（`control`、`accessibility`、
+  `unavailable`、`changed` 或 `notFound`）。
+* **原生回退。** 点到状态项（菜单栏附加项）、苹果菜单或任何不是前台应用
+  菜单标题的位置时，Mac 回复
+  `{"type":"barMenu","ok":true,"native":true,"req":N}`；接收端随后按正常输入
+  路径重放原始 touch，由 Mac 打开系统自己的 AppKit 菜单。状态项的面板和
+  苹果菜单从不镜像。
+* **`barMenuPress`**（接收端 -> Mac）：
+  `{"type":"barMenuPress","path":[3,0],"titles":["编辑","撤销"],"req":2}`。
+  与 6.13 相同，Mac 先校验路径上每个标题仍然匹配，再执行该项目的
+  `AXPress`；变化了的菜单绝不会被按下。需要控制权限。
+* **`barMenuResult`**（Mac -> 接收端）：`{"type":"barMenuResult","ok":true,"req":2}`，
+  或 `ok:false` 加 `error`。
+* **安全。** 这些消息只作用于已认证、已接纳、有控制权限的连接；Mac 从不
+  发送苹果菜单；`x`/`y` 只用于定位前台应用的 AX 菜单栏标题；身份和信任仍
+  由固定的 TLS 与 `hello` 决定。接收端绘制的菜单只是 UI，每个按下都由 Mac
+  重新校验标题。
 
 #### 6.10 补遗：添加到当前舞台 (`windowAction` `addToStage`)
 

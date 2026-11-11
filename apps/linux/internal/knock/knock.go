@@ -30,6 +30,9 @@ const (
 	Port          = 9003
 	maxKnockBytes = 256
 	frameType     = "remoteConnectRequest"
+	// Only a handful of truly unauthenticated knock connections may be in
+	// flight; each holds a goroutine and a socket until its 10 s deadline.
+	maxConcurrentKnocks = 8
 )
 
 type Request struct {
@@ -68,6 +71,7 @@ func Listen(ctx context.Context, cfg Config, requests chan<- Request) error {
 		<-ctx.Done()
 		_ = listener.Close()
 	}()
+	slots := make(chan struct{}, maxConcurrentKnocks)
 
 	for {
 		conn, err := listener.Accept()
@@ -78,11 +82,19 @@ func Listen(ctx context.Context, cfg Config, requests chan<- Request) error {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
-		go handle(conn, cfg, requests)
+		select {
+		case slots <- struct{}{}:
+			go handle(conn, cfg, requests, slots)
+		default:
+			// Every slot is held by a connection that has not proved a pin
+			// yet; close this one instead of piling up goroutines.
+			_ = conn.Close()
+		}
 	}
 }
 
-func handle(conn net.Conn, cfg Config, requests chan<- Request) {
+func handle(conn net.Conn, cfg Config, requests chan<- Request, slots chan struct{}) {
+	defer func() { <-slots }()
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
 

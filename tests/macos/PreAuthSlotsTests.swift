@@ -1,6 +1,18 @@
 import XCTest
 
 final class PreAuthSlotsTests: XCTestCase {
+    func testOneSourceCannotTakeEverySlot() {
+        let slots = PreAuthSlots(limit: 4, perSourceLimit: 2)
+        XCTAssertTrue(slots.tryAcquire(source: "10.0.0.1"))
+        XCTAssertTrue(slots.tryAcquire(source: "10.0.0.1"))
+        XCTAssertFalse(slots.tryAcquire(source: "10.0.0.1"), "one host already holds its share")
+        XCTAssertTrue(slots.tryAcquire(source: "10.0.0.2"), "another host still gets a slot")
+        XCTAssertTrue(slots.tryAcquire(source: "10.0.0.2"))
+        XCTAssertFalse(slots.tryAcquire(source: "10.0.0.2"))
+        slots.release(source: "10.0.0.1")
+        XCTAssertTrue(slots.tryAcquire(source: "10.0.0.1"))
+    }
+
     func testSlotsAreBoundedAndReusable() {
         let slots = PreAuthSlots(limit: 2)
         XCTAssertTrue(slots.tryAcquire())

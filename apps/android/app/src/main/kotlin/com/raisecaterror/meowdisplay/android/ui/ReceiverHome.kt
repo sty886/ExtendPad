@@ -410,6 +410,10 @@ fun ReceiverHome(
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.semantics { contentDescription = "配对验证码：" + prompt.sas.toCharArray().joinToString(" ") },
                     )
+                    // The name is self-chosen; this ID comes from the peer's
+                    // actual TLS public key, so a spoofed name is not the
+                    // only thing the person can check.
+                    Text("Device ID ${prompt.shortID}", style = MaterialTheme.typography.bodySmall)
                     if (prompt.classification == PairingClassification.IdentityChanged) {
                         Text("Only continue if you reinstalled ExtendPad on that Mac or reset it. Otherwise, cancel.", style = MaterialTheme.typography.bodySmall)
                     }

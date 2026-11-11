@@ -21,8 +21,10 @@ import com.raisecaterror.meowdisplay.core.remote.RemotePairingOutcome
 import com.raisecaterror.meowdisplay.core.remote.RemotePairingRunner
 import com.raisecaterror.meowdisplay.core.remote.RemotePorts
 import com.raisecaterror.meowdisplay.core.session.WireProtocol
+import com.raisecaterror.meowdisplay.core.tls.PinnedTls
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -46,6 +48,8 @@ import android.util.Log
 data class SasPrompt(
     val peerName: String,
     val sas: String,
+    /** Four hex characters derived from the peer's actual TLS key, not its self-chosen name. */
+    val shortID: String,
     val classification: PairingClassification,
     internal val answer: CompletableDeferred<Boolean>,
     internal val attempt: PairingAttempt,
@@ -86,7 +90,14 @@ class PairingController(
     /** The media protocol version this receiver speaks. */
     private val advertisedProtocolVersion = WireProtocol.VERSION
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // A pairing listener is unauthenticated by design. No failure in one
+    // attempt may escape as an uncaught coroutine exception: on Android that
+    // kills the whole app (and the live display session with it).
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, error ->
+            Log.e(TAG, "pairing coroutine failed: ${error.javaClass.simpleName}", error)
+        }
+    )
     private val throttle = PairingCommitThrottle()
     private val preAuth = PreAuthSlots(PreAuthSlots.PAIRING_LIMIT)
     private var remoteJob: Job? = null
@@ -241,10 +252,11 @@ class PairingController(
                     } catch (_: IOException) {
                         break
                     }
-                    val slot = preAuth.tryAcquire()
+                    val slot = preAuth.tryAcquire(source = socket.inetAddress)
                     if (slot == null) {
                         // Every slot is held by a connection that hasn't sent its
-                        // commitment yet: close this one at once.
+                        // commitment yet (or this one host already holds its
+                        // share): close this one at once.
                         runCatching { socket.close() }
                         continue
                     }
@@ -256,23 +268,41 @@ class PairingController(
         }
     }
 
-    private suspend fun respond(socket: Socket, slot: PreAuthSlots.Slot) = socket.use {
-        socket.tcpNoDelay = true
-        val attempt = attempt(socket)
-        val outcome = try {
-            val paired = withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) {
-                attempt.runResponder(throttle, decide = { ask(it, attempt) },
-                                     onCommitmentReceived = { slot.release() })
-            } ?: throw PairingException(PairingError.Rejected)
-            "Paired with ${paired.peerName}"
+    private suspend fun respond(socket: Socket, slot: PreAuthSlots.Slot) {
+        try {
+            socket.use {
+                socket.tcpNoDelay = true
+                val attempt = attempt(socket)
+                val outcome = try {
+                    val paired = withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) {
+                        attempt.runResponder(throttle, decide = { ask(it, attempt) },
+                                             onCommitmentReceived = { slot.release() })
+                    } ?: throw PairingException(PairingError.Rejected)
+                    "Paired with ${paired.peerName}"
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: PairingException) {
+                    // A malformed or throttled attempt never showed anything: stay quiet.
+                    if (e.error == PairingError.MalformedMessage || e.error == PairingError.TooManyAttempts) null
+                    else e.error.userMessage
+                } catch (e: IOException) {
+                    // The peer reset or half-closed the socket while the ceremony
+                    // was writing (a hello/confirmation). That must fail this
+                    // attempt only — never escape as an uncaught coroutine error.
+                    Log.w(TAG, "pairing socket failed: ${e.javaClass.simpleName}")
+                    null
+                } catch (e: Exception) {
+                    Log.w(TAG, "pairing attempt failed: ${e.javaClass.simpleName}", e)
+                    null
+                }
+                if (outcome != null) state.update { it.copy(message = outcome) }
+            }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: PairingException) {
-            // A malformed or throttled attempt never showed anything: stay quiet.
-            if (e.error == PairingError.MalformedMessage || e.error == PairingError.TooManyAttempts) null
-            else e.error.userMessage
+        } catch (e: Exception) {
+            // Defence in depth for anything thrown by socket setup/close.
+            Log.w(TAG, "pairing responder failed: ${e.javaClass.simpleName}", e)
         }
-        if (outcome != null) state.update { it.copy(message = outcome) }
     }
 
     private fun attempt(socket: Socket) = PairingAttempt(
@@ -290,7 +320,10 @@ class PairingController(
      */
     private suspend fun ask(pending: PendingPairing, attempt: PairingAttempt): Boolean {
         val answer = CompletableDeferred<Boolean>()
-        val prompt = SasPrompt(pending.peerName, pending.sas, pending.classification, answer, attempt)
+        val prompt = SasPrompt(
+            pending.peerName, pending.sas, PinnedTls.shortId(pending.peerSPKI),
+            pending.classification, answer, attempt,
+        )
         var shown = false
         state.update {
             // `update` may retry this block: decide afresh each time.
@@ -304,6 +337,7 @@ class PairingController(
     }
 
     private companion object {
+        const val TAG = "MeowPairing"
         const val REMOTE_PAIRING = "remote"
         const val PROMPT_TIMEOUT_MS = 60_000L
         // Slightly later than the prompt, so the prompt's own timeout rejection goes out first.

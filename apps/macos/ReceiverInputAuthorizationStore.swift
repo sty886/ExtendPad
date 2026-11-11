@@ -2,13 +2,14 @@ import Foundation
 
 /// Permanent, per-peer policy for how the Mac responds to a receiver's
 /// control-request (`allowInputRequest`) — see `PeerInputRequestPolicy` and
-/// the request flow in `SenderController.handleInputControlRequested`. This
-/// is deliberately NOT a live grant: it only ever decides whether a future
-/// request gets a Mac prompt, is auto-granted, or is auto-denied. It can
-/// never itself turn a session's input on — every new logical session still
-/// starts with effective input OFF regardless of this policy, and the Mac-
-/// wide master (`InputPolicy`/`SenderController.allowInput`) still gates on
-/// top of it unconditionally.
+/// the request flow in `SenderController.handleInputControlRequested`. It
+/// decides whether a request gets a Mac prompt, is auto-granted, or is
+/// auto-denied. The default Ask policy never turns input on by itself: the
+/// session still starts OFF and the receiver must ask. The one exception is
+/// an explicit Always Allow device, which `AutomaticSessionInputPolicy` may
+/// grant when an admitted connection opens (still subject to the Mac-wide
+/// master switch and the on-console check). A grant never carries to another
+/// connection on its own; the next connection is granted or asked again.
 ///
 /// Mirrors `WakeMetadataStore`'s pattern exactly: keyed by the same stable
 /// peer install ID `TrustStore` uses, one UserDefaults dictionary, nothing

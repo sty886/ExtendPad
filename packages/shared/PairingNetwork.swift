@@ -64,6 +64,14 @@ final class NWPairingTransport: PairingTransport, @unchecked Sendable {
 }
 
 enum PairingNetwork {
+    /// A stable, address-only key for the pre-auth slot bound. Never used for trust.
+    /// Nil when the endpoint is not a concrete peer address (then only the global bound applies).
+    static func sourceKey(for connection: NWConnection) -> String? {
+        let endpoint = connection.currentPath?.remoteEndpoint ?? connection.endpoint
+        guard case .hostPort = endpoint else { return nil }
+        return String(describing: endpoint)
+    }
+
     static func runInitiator(connection: NWConnection, localID: String, localName: String,
                              prompt: PairingPromptModel, expectedPeerID: String? = nil,
                              allowIdentityChange: Bool = false,
@@ -130,13 +138,17 @@ enum PairingNetwork {
                              store: TrustStore = .shared) async throws -> PendingPairing {
         // Until its commitment arrives the peer is anyone on the network: it
         // holds one of a few slots, and only for `PreAuthSlots.deadline`.
-        guard preAuth.tryAcquire() else {
+        // The source bound stops a single host from holding all of them.
+        let preAuthSource = Self.sourceKey(for: connection)
+        guard preAuth.tryAcquire(source: preAuthSource) else {
             Log.info("pairDebug: too many unauthenticated pairing connections — closing this one")
             connection.cancel()
             throw PairingError.tooManyAttempts
         }
         var preAuthHeld = true
-        func releasePreAuth() { if preAuthHeld { preAuthHeld = false; preAuth.release() } }
+        func releasePreAuth() {
+            if preAuthHeld { preAuthHeld = false; preAuth.release(source: preAuthSource) }
+        }
         defer { releasePreAuth() }
         let (transport, gate, slot) = await beginAttempt(connection: connection, prompt: prompt, token: attemptToken)
         defer { Task { @MainActor in prompt.attemptEnded(token: attemptToken) } }

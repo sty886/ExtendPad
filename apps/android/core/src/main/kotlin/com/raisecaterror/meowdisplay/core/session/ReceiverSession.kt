@@ -62,7 +62,7 @@ sealed interface SessionEvent {
     data class DisplayPaused(val paused: Boolean) : SessionEvent
     data class DisplayModeConfirmed(val mode: DisplayMode) : SessionEvent
     /** What the Mac offers beyond its protocol version (welcome `features`), e.g. "window". */
-    data class MacFeatures(val features: Set<String>) : SessionEvent
+    data class MacFeatures(val features: Set<String>, val barMenuHeight: Double? = null) : SessionEvent
     /** The Mac's Privacy Shield is on or off for this connection (shown briefly after each connection). */
     data class PrivacyShield(val on: Boolean) : SessionEvent
     /** Who uses the authenticated Mac [peerID] (null: hidden on that Mac). */
@@ -595,7 +595,7 @@ class ReceiverSession(
                 macFeatures = message.features
                 streamModel.peerVersion(message.pv)
                 publishStreamSettings()
-                deliver("features", SessionEvent.MacFeatures(message.features))
+                deliver("features", SessionEvent.MacFeatures(message.features, message.barMenuHeight))
                 if (link === from) sendRemoteEndpointsIfSupported()
                 message.privacyShield?.let { deliver("privacyShield", SessionEvent.PrivacyShield(it)) }
                 deliver("macUser", SessionEvent.MacUser(from.peerID, message.user))

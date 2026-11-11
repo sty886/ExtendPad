@@ -272,6 +272,7 @@ targets:
       - apps/macos/RemoteFileTransfers.swift
       - apps/macos/RemoteFilesAuthorization.swift
       - apps/macos/AppMenuReader.swift
+      - apps/macos/BarMenuService.swift
       - apps/macos/WindowCloser.swift
       - apps/macos/ClipboardHub.swift
       # Mac-side input revocation end to end (MacSenderInputRevocationTests):

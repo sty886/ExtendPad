@@ -31,6 +31,9 @@ import com.raisecaterror.meowdisplay.core.workspace.MacApp
 import com.raisecaterror.meowdisplay.core.workspace.AppMenuModel
 import com.raisecaterror.meowdisplay.core.workspace.AppMenuReply
 import com.raisecaterror.meowdisplay.core.workspace.AppMenuWire
+import com.raisecaterror.meowdisplay.core.workspace.BarMenuModel
+import com.raisecaterror.meowdisplay.core.workspace.BarMenuReply
+import com.raisecaterror.meowdisplay.core.workspace.BarMenuWire
 import com.raisecaterror.meowdisplay.core.workspace.RemoteFilesModel
 import com.raisecaterror.meowdisplay.core.workspace.RemoteFilesReply
 import com.raisecaterror.meowdisplay.core.workspace.RemoteFilesStyle
@@ -283,6 +286,18 @@ class WorkspaceController(
         onBarShown = { prefs.edit().putBoolean(MENU_BAR, it).apply() },
     )
 
+    /** Extend/Mirror: the streamed display's menu bar menus (PROTOCOL.md 6.18). */
+    val barMenus = BarMenuModel(
+        send = { media.session.sendWorkspace(it) },
+        onNative = { x, y ->
+            // The Mac said this is a status item or the Apple menu: play the original tap
+            // through the normal input path, which is what opens its AppKit menu.
+            val input = media.session.input
+            input.touch("began", x, y)
+            main.postDelayed({ input.touch("ended", x, y) }, 60)
+        },
+    )
+
     // MARK: Session
 
     /** The notice was shown long enough (only the one still showing is cleared). */
@@ -297,12 +312,13 @@ class WorkspaceController(
                 files.setAvailable(RemoteFilesWire.WELCOME_FEATURE in event.features)
                 clipboard.setAvailable(com.raisecaterror.meowdisplay.core.clipboard.ClipboardWire.FEATURE in event.features)
                 menus.setAvailable(AppMenuWire.WELCOME_FEATURE in event.features)
+                barMenus.setAvailable(BarMenuWire.FEATURE in event.features, event.barMenuHeight)
             }
             is SessionEvent.DisplayModeConfirmed -> {
                 val window = event.mode == DisplayMode.Window
                 if (!window) fullDisplayMode = event.mode
                 state.update { it.copy(windowMode = window, remote = if (window) it.remote else null, localFullscreen = if (window) it.localFullscreen else null) }
-                if (window) { catalogAwaitingSend = true; requestCatalog() }
+                if (window) { barMenus.close(); catalogAwaitingSend = true; requestCatalog() }
                 publish()
             }
             is SessionEvent.Disconnected, SessionEvent.AdmissionWithdrawn -> {
@@ -314,6 +330,7 @@ class WorkspaceController(
                 clipboard.setAvailable(false)
                 (clipboard.platform as? AndroidClipboardPlatform)?.forgetSent()
                 menus.setAvailable(false)
+                barMenus.setAvailable(false, null)
                 state.update {
                     it.copy(windowMode = false, remote = null, available = false, arranging = false, stagePeekOpen = false,
                         launchpadOpen = false, launching = emptySet(), drag = null,
@@ -353,6 +370,11 @@ class WorkspaceController(
                 com.raisecaterror.meowdisplay.core.clipboard.ClipboardWire.TYPE -> clipboard.handle(event.body)
                 AppMenuWire.MENU -> menus.apply(AppMenuReply.parse(event.body))
                 AppMenuWire.RESULT -> menus.applyResult(
+                    (event.body["ok"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true",
+                    (event.body["error"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.take(32),
+                )
+                BarMenuWire.MENU -> barMenus.apply(BarMenuReply.parse(event.body))
+                BarMenuWire.RESULT -> barMenus.applyResult(
                     (event.body["ok"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true",
                     (event.body["error"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.take(32),
                 )

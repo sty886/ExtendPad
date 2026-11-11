@@ -6,6 +6,11 @@ import CoreGraphics
 /// W×H gets a virtual display of (W/2)×(H/2) points backed by a W×H framebuffer.
 final class VirtualDisplay {
 
+    /// Last line of defence for the private API's unchecked `UInt32`
+    /// conversion. No supported display is anywhere near this size; anything
+    /// larger is a malformed `hello`, not a monitor.
+    static let hardMaxPointsPerAxis = 16_384
+
     private let display: CGVirtualDisplay
     private var settings: CGVirtualDisplaySettings
     private let maxPointsPerAxis: Int
@@ -41,6 +46,12 @@ final class VirtualDisplay {
           restoreOrigin: CGPoint? = nil,
           owner: ObjectIdentifier? = nil,
           onOriginChange: ((CGPoint, CGSize) -> Void)? = nil) {
+        guard pointsWide >= 2, pointsHigh >= 2,
+              pointsWide <= Self.hardMaxPointsPerAxis, pointsHigh <= Self.hardMaxPointsPerAxis,
+              refreshRate > 0, refreshRate <= 480 else {
+            Log.info("virtual display refused: implausible geometry \(pointsWide)x\(pointsHigh)pt @\(refreshRate)Hz")
+            return nil
+        }
         self.pointsWide = pointsWide
         self.pointsHigh = pointsHigh
         self.refreshRate = refreshRate

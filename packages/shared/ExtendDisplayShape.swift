@@ -103,6 +103,15 @@ struct ExtendDisplayShapePreference: Codable, Equatable {
 /// reconnect (or the periodic HiDPI-mode enforcement in
 /// `Mac/VirtualDisplay.swift`) never drifts.
 enum ExtendDisplaySizing {
+    /// Hard cap on one virtual-display axis, in points. `VirtualDisplay`
+    /// converts points to `UInt32` pixels and Swift traps on overflow; a
+    /// receiver-supplied `hello` must never reach that unchecked.
+    static let maxAxisPoints = 16_384
+
+    private static func capped(_ value: Int) -> Int {
+        min(max(value, 2), maxAxisPoints)
+    }
+
     /// `receiverPixelsWide/High` are `hello.pixelsWide/High` verbatim
     /// (physical pixels, current orientation). Returns points, rounded to
     /// even (the encoder wants even dimensions).
@@ -120,13 +129,18 @@ enum ExtendDisplaySizing {
         }
         let physicalAspect = Double(receiverPixelsWide) / Double(receiverPixelsHigh)
         if abs(aspect - physicalAspect) < 0.0005 {
-            let wide = max((receiverPixelsWide / 2) & ~1, 2)
-            let high = max((receiverPixelsHigh / 2) & ~1, 2)
-            return (wide, high)
+            return (capped((receiverPixelsWide / 2) & ~1),
+                    capped((receiverPixelsHigh / 2) & ~1))
         }
         let longEdge = max(receiverPixelsWide, receiverPixelsHigh)
-        let wide = max((longEdge / 2) & ~1, 2)
-        let high = max((Int((Double(wide) / aspect).rounded()) & ~1), 2)
+        let wide = capped((longEdge / 2) & ~1)
+        // `aspect` is checked > 0 above, but an extremely small value would
+        // make this quotient overflow the Int conversion. Bound it first.
+        let rawHigh = Double(wide) / aspect
+        let boundedHigh = rawHigh.isFinite
+            ? min(rawHigh, Double(maxAxisPoints))
+            : Double(maxAxisPoints)
+        let high = capped(Int(boundedHigh.rounded()) & ~1)
         return (wide, high)
     }
 }

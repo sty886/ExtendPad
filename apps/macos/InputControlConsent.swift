@@ -58,14 +58,16 @@ struct InputControlRequestPlan: Equatable {
     }
 }
 
-/// ExtendPad grants an authenticated, admitted paired device control when its
-/// connection opens, instead of requiring another consent tap every time.
-/// Pairing, transport authentication and the Mac-wide master switch remain
-/// mandatory; an explicit Never Allow device policy is never overridden.
+/// ExtendPad grants control when an admitted connection opens only for a
+/// device the Mac owner explicitly marked Always Allow. That is the one
+/// persisted choice that means "do not ask me again for this device"; the
+/// default Ask policy must still reach the owner's prompt, and Never Allow is
+/// never overridden. Pairing, transport authentication, session admission and
+/// the Mac-wide master switch remain mandatory regardless.
 enum AutomaticSessionInputPolicy {
     static func shouldGrant(masterEnabled: Bool, onConsole: Bool,
                             policy: PeerInputRequestPolicy) -> Bool {
-        masterEnabled && onConsole && policy != .neverAllow
+        masterEnabled && onConsole && policy == .alwaysAllow
     }
 }
 

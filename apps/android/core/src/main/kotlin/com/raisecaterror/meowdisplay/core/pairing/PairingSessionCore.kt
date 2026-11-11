@@ -1,5 +1,6 @@
 package com.raisecaterror.meowdisplay.core.pairing
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -47,14 +48,30 @@ class PairingAbortSlot {
  * Reads peer frames concurrently with the local SAS prompt, so an
  * authenticated abort ends the attempt at once, even while the code is on
  * screen. An abort that fails authentication ends it as malformed.
+ *
+ * Bounded on purpose: after both hellos the only legitimate frames are
+ * `confirmation`, `commit` and `commitAck` (plus an authenticated `abort`).
+ * A peer that streams anything else, or more than [MAX_BUFFERED_FRAMES]
+ * frames while the local decision is pending, is violating the ceremony and
+ * fails the attempt instead of growing memory without bound.
  */
 internal class PairingFramePump(
     transport: PairingTransport,
     result: PairingResult,
     onPeerAbort: () -> Unit,
 ) {
+    companion object {
+        /** A real peer sends at most one confirmation before the local decision. */
+        const val MAX_BUFFERED_FRAMES = 4
+        private val POST_HELLO_KINDS = setOf(
+            PairingEnvelope.Kind.Confirmation,
+            PairingEnvelope.Kind.Commit,
+            PairingEnvelope.Kind.CommitAck,
+        )
+    }
+
     val peerAborted = AtomicBoolean(false)
-    private val frames = Channel<Result<PairingEnvelope>>(Channel.UNLIMITED)
+    private val frames = Channel<PairingEnvelope>(capacity = MAX_BUFFERED_FRAMES)
 
     // Detached: a blocking socket read ends only when the caller closes the
     // socket, and run() must not wait for that.
@@ -69,22 +86,46 @@ internal class PairingFramePump(
                     if (authentic) {
                         peerAborted.set(true)
                         onPeerAbort()
-                        frames.send(Result.failure(PairingException(PairingError.CancelledByPeer)))
+                        frames.close(PairingException(PairingError.CancelledByPeer))
                     } else {
-                        frames.send(Result.failure(PairingException(PairingError.MalformedMessage)))
+                        frames.close(PairingException(PairingError.MalformedMessage))
                     }
                     return@launch
                 }
-                frames.send(Result.success(envelope))
+                if (envelope.kind !in POST_HELLO_KINDS) {
+                    frames.close(PairingException(PairingError.MalformedMessage))
+                    return@launch
+                }
+                if (frames.trySend(envelope).isFailure) {
+                    frames.close(PairingException(PairingError.TooManyAttempts))
+                    return@launch
+                }
             }
-        } catch (e: Exception) {
-            frames.trySend(Result.failure(e))
+        } catch (e: CancellationException) {
+            frames.close(e)
+        } catch (e: PairingException) {
+            frames.close(e)
+        } catch (_: Exception) {
+            frames.close(PairingException(PairingError.MalformedMessage))
         }
     }
 
-    suspend fun next(): PairingEnvelope = frames.receive().getOrThrow()
+    suspend fun next(): PairingEnvelope = try {
+        frames.receive()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: PairingException) {
+        throw e
+    } catch (_: Exception) {
+        // A channel closed without a cause (stop()) is a failed attempt, not
+        // a cancellation of the caller's session.
+        throw PairingException(PairingError.MalformedMessage)
+    }
 
-    fun stop() = job.cancel()
+    fun stop() {
+        job.cancel()
+        frames.close()
+    }
 }
 
 /**

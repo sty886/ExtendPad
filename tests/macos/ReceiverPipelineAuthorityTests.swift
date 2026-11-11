@@ -275,8 +275,16 @@ final class ReceiverPipelineAuthorityTests: XCTestCase {
     func testWaitingNewcomersAreBounded() async throws {
         let host = PipelineTestHost()
         let pipeline = host.makePipeline()
-        let (listener, stranger) = try await strangerRig()
-        let newcomers = (0..<(ReceiverPipelineActor.maxPendingConnections + 2)).map { _ in stranger() }
+        // Distinct remote endpoints (one silent listener per source) so the
+        // global bound, not the per-source bound, is what evicts the oldest.
+        var rigs: [(listener: NWListener, stranger: () -> NWConnection)] = []
+        for _ in 0..<6 {
+            let (listener, stranger) = try await strangerRig()
+            rigs.append((listener, stranger))
+        }
+        let newcomers = (0..<(ReceiverPipelineActor.maxPendingConnections + 2)).map {
+            rigs[$0 % rigs.count].stranger()
+        }
         for newcomer in newcomers { await pipeline.handleIncomingConnection(newcomer) }
 
         let oldestDropped = await eventually {
@@ -284,6 +292,28 @@ final class ReceiverPipelineAuthorityTests: XCTestCase {
         }
         XCTAssertTrue(oldestDropped, "the oldest waiting connections are closed")
         XCTAssertNotEqual(newcomers.last?.state, .cancelled, "the newest still waits")
+        newcomers.forEach { $0.cancel() }
+        rigs.forEach { $0.listener.cancel() }
+        await stopRecovery(pipeline)
+    }
+
+    /// One address may hold only `maxPendingPerSource` slots: the rest of
+    /// its connections are closed at once, even while global slots remain.
+    func testWaitingNewcomersFromOneSourceAreCapped() async throws {
+        let host = PipelineTestHost()
+        let pipeline = host.makePipeline()
+        let (listener, stranger) = try await strangerRig()
+        let newcomers = (0..<(ReceiverPipelineActor.maxPendingPerSource + 4)).map { _ in stranger() }
+        for newcomer in newcomers { await pipeline.handleIncomingConnection(newcomer) }
+
+        let refused = await eventually {
+            newcomers.dropFirst(ReceiverPipelineActor.maxPendingPerSource)
+                .allSatisfy { $0.state == .cancelled }
+        }
+        XCTAssertTrue(refused, "connections beyond one host's share are closed at once")
+        for newcomer in newcomers.prefix(ReceiverPipelineActor.maxPendingPerSource) {
+            XCTAssertNotEqual(newcomer.state, .cancelled, "the first connections from that host still wait")
+        }
         newcomers.forEach { $0.cancel() }
         listener.cancel()
         await stopRecovery(pipeline)

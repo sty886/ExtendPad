@@ -16,8 +16,29 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.net.InetAddress
 
 class PreAuthSlotsTest {
+    @Test
+    fun oneSourceCannotHoldEverySlot() {
+        val slots = PreAuthSlots(4, perSourceLimit = 2)
+        val first = InetAddress.getByName("10.0.0.1")
+        val second = InetAddress.getByName("10.0.0.2")
+
+        val a1 = slots.tryAcquire(first)
+        val a2 = slots.tryAcquire(first)
+        assertNotNull(a1)
+        assertNotNull(a2)
+        assertNull("one host already holds its share", slots.tryAcquire(first))
+
+        assertNotNull("another host still gets a slot", slots.tryAcquire(second))
+        assertNotNull(slots.tryAcquire(second))
+        assertNull(slots.tryAcquire(second))
+
+        a1!!.release()
+        assertNotNull("the first host may reconnect after releasing", slots.tryAcquire(first))
+    }
+
     @Test
     fun slotsAreBoundedAndEachReleasesOnce() {
         val slots = PreAuthSlots(2)

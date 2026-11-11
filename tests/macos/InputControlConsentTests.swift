@@ -10,8 +10,10 @@ final class InputControlConsentTests: XCTestCase {
         XCTAssertTrue(EffectiveInputAuthorization.allowed(masterEnabled: true, sessionGranted: true))
     }
 
-    func testPairedDeviceIsGrantedOnAdmissionWithoutAnotherPrompt() {
-        XCTAssertTrue(AutomaticSessionInputPolicy.shouldGrant(masterEnabled: true, onConsole: true, policy: .ask))
+    func testOnlyAnExplicitAlwaysAllowDeviceIsGrantedOnAdmission() {
+        // The default Ask policy must still reach the owner's prompt; only an
+        // explicit per-device Always Allow means "do not ask again".
+        XCTAssertFalse(AutomaticSessionInputPolicy.shouldGrant(masterEnabled: true, onConsole: true, policy: .ask))
         XCTAssertTrue(AutomaticSessionInputPolicy.shouldGrant(masterEnabled: true, onConsole: true, policy: .alwaysAllow))
     }
 

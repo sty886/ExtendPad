@@ -113,7 +113,20 @@ actor ReceiverPipelineActor {
     /// pinned TLS handshake can't pile up.
     private var pendingConnections: [NWConnection] = []
     static let maxPendingConnections = 8
+    /// One address may hold at most this many of the pending slots, so a
+    /// single unauthenticated host cannot evict a legitimate receiver by
+    /// keeping the global bound full.
+    static let maxPendingPerSource = 2
     static let pendingDeadline: TimeInterval = 15
+
+    /// Address-only key for the per-source bound. Never an identity. Nil when
+    /// the endpoint is not a concrete peer address, in which case only the
+    /// global bound applies.
+    private static func sourceKey(_ connection: NWConnection) -> String? {
+        let endpoint = connection.currentPath?.remoteEndpoint ?? connection.endpoint
+        guard case .hostPort = endpoint else { return nil }
+        return String(describing: endpoint)
+    }
     private(set) var sessionState = ReceiverSessionState()
     private var reconnectTimer: DispatchSourceTimer?
     private var pingTimer: DispatchSourceTimer?
@@ -615,6 +628,14 @@ actor ReceiverPipelineActor {
     /// Tracks a newcomer until it proves itself: the oldest is dropped when
     /// too many are waiting, and each is dropped at `pendingDeadline`.
     private func park(_ newcomer: NWConnection) {
+        if let source = Self.sourceKey(newcomer) {
+            let fromSource = pendingConnections.filter { Self.sourceKey($0) == source }.count
+            guard fromSource < Self.maxPendingPerSource else {
+                Log.info("reconnectDebug: too many connections from one source waiting — dropping this one")
+                retire(newcomer)
+                return
+            }
+        }
         if pendingConnections.count >= Self.maxPendingConnections {
             Log.info("reconnectDebug: too many connections waiting — dropping the oldest")
             retire(pendingConnections.removeFirst())

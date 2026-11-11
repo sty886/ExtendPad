@@ -47,6 +47,32 @@ final class InputInjectorDirectTouchTests: XCTestCase {
         XCTAssertTrue(sink.events.isEmpty)
     }
 
+    func testHostileScrollAndPencilNumbersNeverTrap() {
+        let grant = SessionInputGrantBox()
+        grant.set(true)
+        let sink = Sink()
+        let injector = InputInjector(displayID: CGMainDisplayID(), sessionInputGrant: grant, eventSink: sink)
+
+        // Values that used to reach `Int(1e308)` / `Int64(pressure * 65535)`.
+        injector.handleScroll(dx: 1e308, dy: 1e308)
+        injector.handlePointerMoveRelative(dx: 1e308, dy: 1e308)
+        injector.handlePencil(phase: "down", x: 1e308, y: -1e308, pressure: 1e308,
+                              azimuth: 1e308, altitude: -1e308, rotation: 1e308)
+        injector.handlePointerDown(button: .left, clickCount: Int.max)
+        injector.handlePointerUp(button: .left, clickCount: Int.max)
+
+        XCTAssertTrue(sink.events.allSatisfy {
+            $0.location.x.isFinite && $0.location.y.isFinite
+        }, "every posted event must carry a finite location")
+        XCTAssertTrue(sink.events.allSatisfy {
+            let pressure = $0.getDoubleValueField(.mouseEventPressure)
+            return pressure.isFinite && (0...1).contains(pressure)
+        }, "tablet pressure must be finite and inside 0...1")
+        XCTAssertTrue(sink.events.allSatisfy {
+            $0.getIntegerValueField(.mouseEventClickState) <= 3
+        }, "click state is clamped to a triple click")
+    }
+
     func testOnlyNativeMenuItemsUseAccessibilityPressRouting() {
         XCTAssertTrue(DirectTouchMenuRouting.isMenuRole(kAXMenuBarItemRole as String))
         XCTAssertTrue(DirectTouchMenuRouting.isMenuRole(kAXMenuItemRole as String))
@@ -63,6 +89,23 @@ final class InputInjectorDirectTouchTests: XCTestCase {
         XCTAssertNil(DirectTouchMenuRouting.preferredAction(["AXOpen"]))
     }
 
+    /// A native menu opened by an accessibility action stays in a tracking session that
+    /// per-PID events cannot end: Finder ignored every later tap until it was restarted.
+    /// Only a successful AXPress on a leaf command both performs and closes.
+    func testOnlyALeafPressEndsNativeMenuTracking() {
+        XCTAssertFalse(DirectTouchMenuRouting.leavesMenuTracking(
+            action: kAXPressAction as String, succeeded: true, hasSubmenu: false))
+        XCTAssertTrue(DirectTouchMenuRouting.leavesMenuTracking(
+            action: kAXShowMenuAction as String, succeeded: true, hasSubmenu: false),
+            "opening a menu never performs the item")
+        XCTAssertTrue(DirectTouchMenuRouting.leavesMenuTracking(
+            action: kAXPressAction as String, succeeded: true, hasSubmenu: true),
+            "a submenu parent opens a tracking session")
+        XCTAssertTrue(DirectTouchMenuRouting.leavesMenuTracking(
+            action: kAXPressAction as String, succeeded: false, hasSubmenu: false),
+            "a failed press leaves the menu up")
+    }
+
     /// Window Server menu tracking never sees the per-PID events Direct Touch posts, so an
     /// open menu/panel is dismissed with Escape before a tap elsewhere can act.
     func testATapOutsideAnOpenMenuDismissesItFirst() {
@@ -77,6 +120,23 @@ final class InputInjectorDirectTouchTests: XCTestCase {
                       "even in the app that owns it")
         XCTAssertFalse(DirectTouchMenuRouting.shouldDismissOverlay(at: CGPoint(x: 600, y: 400), targetPID: nil, overlays: []),
                        "no menu, nothing to do")
+    }
+
+    /// The Window Server can report a native menu's one window in another display's
+    /// coordinate space (menu-bar layout scales with display width) even though the menu is
+    /// drawn on the touched display. A tap on the visible copy must choose from it, not
+    /// dismiss it.
+    func testAMenuIsRecognizedOnTheDisplayThatShowsItsCopy() {
+        let main = CGRect(x: 0, y: 0, width: 1512, height: 982)
+        let secondary = CGRect(x: -1280, y: 76, width: 1280, height: 800)
+        let menu = CGRect(x: 132, y: 34, width: 181, height: 283)
+        let onTheCopy = CGPoint(x: -1120, y: 300)
+
+        XCTAssertFalse(menu.contains(onTheCopy), "the reported window is on the other display")
+        XCTAssertTrue(DirectTouchMenuRouting.menuContains(menu, point: onTheCopy,
+                                                          pointDisplay: secondary, frameDisplay: main))
+        XCTAssertFalse(DirectTouchMenuRouting.menuContains(
+            menu, point: CGPoint(x: -1280, y: 700), pointDisplay: secondary, frameDisplay: main))
     }
 
     /// Control Center's panel is a full-screen window, so frame containment cannot tell it

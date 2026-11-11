@@ -51,6 +51,67 @@ enum AppMenuRequests {
     }
 }
 
+// MARK: - The streamed display's menu bar (PROTOCOL.md 6.18)
+
+/// In Mirror/Extend the receiver owns the menu bar's drop-downs: the Mac reads the frontmost
+/// app's menus through Accessibility and the receiver draws them on the streamed display.
+/// Needed because macOS anchors a windowless Finder's desktop menus to the main display, not
+/// the extended one, and the window cannot be moved (AX position is not settable; private
+/// window moves are refused).
+enum BarMenuWire {
+    static let welcomeFeature = "barMenus"
+    /// Fraction of the streamed display's height occupied by the menu bar.
+    static let heightField = "barMenuHeight"
+
+    static func read(x: Double, y: Double, path: [Int], req: Int) -> [String: Any] {
+        ["type": WireMessage.barMenuRequest, "x": x, "y": y, "path": path, "req": req]
+    }
+
+    static func press(path: [Int], titles: [String], req: Int) -> [String: Any] {
+        ["type": WireMessage.barMenuPress, "path": path, "titles": titles, "req": req]
+    }
+}
+
+/// One menu level returned for the display menu bar. `native` means the Mac opened the
+/// original AppKit menu itself (status items, the Apple menu) and the receiver must not draw.
+struct BarMenuReply: Sendable {
+    var path: [Int]
+    var app: String
+    var title: String?
+    var items: [AppMenuEntry]
+    var ok: Bool
+    var native: Bool
+    var error: String?
+    var req: Int?
+    /// Menu bar height as a fraction of the streamed display, when the Mac included it.
+    var height: Double?
+
+    static func parse(_ obj: [String: Any]) -> BarMenuReply {
+        let path = ((obj["path"] as? [Int]) ?? []).prefix(8).map { $0 }
+        let items = ((obj["items"] as? [[String: Any]]) ?? []).prefix(160).compactMap { o -> AppMenuEntry? in
+            guard let i = o["i"] as? Int, i >= 0, i < 500 else { return nil }
+            if o["sep"] as? Bool == true { return AppMenuEntry(index: i, title: "", separator: true) }
+            guard let t = o["t"] as? String, !t.isEmpty else { return nil }
+            return AppMenuEntry(index: i, title: String(t.prefix(120)), enabled: o["on"] as? Bool ?? true,
+                                checked: o["mark"] as? Bool ?? false, hasSubmenu: o["sub"] as? Bool ?? false,
+                                shortcut: (o["key"] as? String).map { String($0.prefix(12)) })
+        }
+        return BarMenuReply(path: Array(path),
+                            app: String((obj["app"] as? String ?? "").prefix(80)),
+                            title: (obj["title"] as? String).map { String($0.prefix(120)) },
+                            items: Array(items),
+                            ok: obj["ok"] as? Bool ?? true,
+                            native: obj["native"] as? Bool ?? false,
+                            error: (obj["error"] as? String).map { String($0.prefix(32)) },
+                            req: obj["req"] as? Int,
+                            height: {
+                                guard let number = obj["height"] as? NSNumber else { return nil }
+                                let value = number.doubleValue
+                                return value.isFinite && (0.005...0.2).contains(value) ? value : nil
+                            }())
+    }
+}
+
 @MainActor
 final class AppMenuModel: ObservableObject {
     /// One open menu (or submenu) in the drop-down.

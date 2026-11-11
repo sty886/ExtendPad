@@ -25,11 +25,18 @@ private enum SystemClickMetrics {
 protocol SyntheticEventSink: Sendable {
     func post(_ event: CGEvent)
     func postDirectTouch(_ event: CGEvent)
+    /// The gesture is cancelled (capture paused, input revoked, session ending): release any
+    /// contact and put back a pointer a menu-bar click moved.
+    func cancelDirectTouch()
+    /// Ends a native menu/panel tracking session (the receiver is drawing its own menu).
+    func dismissMenuOverlay()
 }
 
 extension SyntheticEventSink {
     /// Test sinks record the event without needing a real target process.
     func postDirectTouch(_ event: CGEvent) { post(event) }
+    func cancelDirectTouch() {}
+    func dismissMenuOverlay() {}
 }
 
 /// Native Mac menus are tracked by the Window Server rather than the target
@@ -44,6 +51,15 @@ enum DirectTouchMenuRouting {
         if actions.contains(kAXShowMenuAction as String) { return kAXShowMenuAction as String }
         if actions.contains(kAXPressAction as String) { return kAXPressAction as String }
         return nil
+    }
+
+    /// Whether performing [action] on a menu item leaves a native menu-tracking session
+    /// running. A successful AXPress on a leaf command performs it and closes the menu;
+    /// AXShowMenu (a submenu parent) or a failed/superseded press opens one instead, which
+    /// only Escape can end. Per-PID mouse events never reach that session, so an untracked
+    /// one freezes the app for every later remote tap.
+    static func leavesMenuTracking(action: String, succeeded: Bool, hasSubmenu: Bool) -> Bool {
+        !succeeded || hasSubmenu || action != kAXPressAction as String
     }
 
     /// The menu bar strip at the top of the display containing [point]. Menu-bar AX work
@@ -97,9 +113,37 @@ enum DirectTouchMenuRouting {
     /// Taps inside a menu choose from it; taps on the panel's own controls stay in it.
     static func shouldDismissOverlay(at point: CGPoint, targetPID: pid_t?, overlays: [OpenOverlay]) -> Bool {
         guard !overlays.isEmpty else { return false }
-        if overlays.contains(where: { $0.isMenu && $0.frame.contains(point) }) { return false }
+        let menus = overlays.filter(\.isMenu)
+        if !menus.isEmpty {
+            var touched = CGDirectDisplayID()
+            var touchedCount: UInt32 = 0
+            let touchedOK = CGGetDisplaysWithPoint(point, 1, &touched, &touchedCount) == .success && touchedCount == 1
+            let touchedFrame = touchedOK ? CGDisplayBounds(touched) : .zero
+            for menu in menus {
+                if menu.frame.contains(point) { return false }
+                guard touchedOK else { continue }
+                var reference = CGDirectDisplayID()
+                var referenceCount: UInt32 = 0
+                let center = CGPoint(x: menu.frame.midX, y: menu.frame.midY)
+                guard CGGetDisplaysWithPoint(center, 1, &reference, &referenceCount) == .success,
+                      referenceCount == 1 else { continue }
+                if menuContains(menu.frame, point: point, pointDisplay: touchedFrame,
+                                frameDisplay: CGDisplayBounds(reference)) { return false }
+            }
+        }
         if let targetPID, overlays.contains(where: { !$0.isMenu && $0.pid == targetPID }) { return false }
         return true
+    }
+
+    /// A native menu is drawn on every display, but its one window can be reported in another
+    /// display's coordinate space (menu-bar layout scales with display width). A tap on the
+    /// menu's visible copy on the touched display still chooses from it.
+    static func menuContains(_ frame: CGRect, point: CGPoint,
+                             pointDisplay: CGRect, frameDisplay: CGRect) -> Bool {
+        if frame.contains(point) { return true }
+        guard let mapped = statusItemPoint(at: point, displayFrame: pointDisplay,
+                                           referenceFrame: frameDisplay) else { return false }
+        return frame.contains(mapped)
     }
 
     /// Status items are exposed in the main display's AX coordinate space even
@@ -233,6 +277,13 @@ final class HIDEventTapSink: SyntheticEventSink, @unchecked Sendable {
     /// The last touch opened a native menu or a status-item panel, so the next touch may have to
     /// dismiss it before it can reach what is underneath. Cleared as soon as no overlay is on screen.
     private var menuMayBeOpen = false
+    /// A menu-bar touch is a real HID click, not an AX press: Window Server menu tracking only
+    /// follows real events, and it opens the drop-down on the display that was actually clicked.
+    /// An AX press opens it on whichever display owns the active AX menu bar, which is why the
+    /// menu used to appear on another screen (or just leave the title highlighted). This
+    /// gesture moves the cursor for the click and restores it once the menu is used/dismissed.
+    private var directTouchMenuBarGesture = false
+    private var directTouchMenuBarCursorBefore: CGPoint?
 
     func post(_ event: CGEvent) {
         // While the Privacy Shield asks for the login password, only this Mac's own input counts;
@@ -250,49 +301,114 @@ final class HIDEventTapSink: SyntheticEventSink, @unchecked Sendable {
 
     /// Located events posted to the global HID queue move the real cursor even
     /// when no mouseMoved event is emitted. Direct Touch instead posts to the
-    /// application under the finger, leaving the operator's pointer untouched.
+    /// application under the finger, leaving the operator's pointer untouched —
+    /// except a menu-bar touch, which is a real click on the touched display's
+    /// menu bar and puts the pointer back afterwards (`beginMenuBarGesture`).
     func postDirectTouch(_ event: CGEvent) {
         directTouchQueue.async { self.handleDirectTouch(event) }
     }
 
+    func cancelDirectTouch() {
+        directTouchQueue.async {
+            if self.directTouchMenuBarGesture {
+                self.directTouchMenuBarGesture = false
+                self.dismissOpenOverlay()
+            }
+            self.restoreMenuBarCursorIfNeeded()
+        }
+    }
+
+    func dismissMenuOverlay() {
+        directTouchQueue.async {
+            self.dismissOpenOverlay()
+            self.menuMayBeOpen = false
+            self.restoreMenuBarCursorIfNeeded()
+        }
+    }
+
     private func handleDirectTouch(_ event: CGEvent) {
         guard !PrivacyShieldWindows.isUnlocking || PrivacyShieldPolicy.postsWhileUnlocking(event.type, flags: event.flags) else { return }
+        // The rest of a menu-bar gesture is a real drag/up at the finger's current point, so
+        // the native menu tracks the finger exactly as it tracks a local mouse.
+        if directTouchMenuBarGesture {
+            switch event.type {
+            case .leftMouseDragged, .rightMouseDragged:
+                CGWarpMouseCursorPosition(event.location)
+                post(event)
+                return
+            case .leftMouseUp, .rightMouseUp:
+                CGWarpMouseCursorPosition(event.location)
+                post(event)
+                directTouchMenuBarGesture = false
+                if event.getIntegerValueField(.mouseEventClickState) == 0 {
+                    // A cancelled touch (a second finger joined): end any tracking
+                    // session and put the local pointer back.
+                    dismissOpenOverlay()
+                    restoreMenuBarCursorIfNeeded()
+                }
+                return
+            default:
+                break
+            }
+        }
+        if (event.type == .leftMouseDown || event.type == .rightMouseDown),
+           DirectTouchMenuRouting.isMenuBarPoint(event.location),
+           Self.menuBarHasTarget(at: event.location) {
+            beginMenuBarGesture(event)
+            return
+        }
         switch event.type {
         case .leftMouseDown:
             var target = Self.applicationTarget(at: event.location)
+            var dismissedMenu = false
             // An open menu/panel owns the pointer: Window Server menu tracking ignores the
             // per-PID mouse events used here, so without this the menu bar stayed dimmed and
             // every later tap was inert. Escape ends that tracking session without moving the
-            // operator's pointer; only checked after a touch that may have opened one (or on a
-            // menu bar), so ordinary taps stay cheap.
-            if menuMayBeOpen || DirectTouchMenuRouting.isMenuBarPoint(event.location) {
+            // operator's pointer; only checked after a touch that may have opened one, so
+            // ordinary taps stay cheap. A tracking session can outlive its window (the menu
+            // bar title stays highlighted with nothing on screen), so an empty overlay list
+            // still means "dismiss" when a menu may be open.
+            if menuMayBeOpen {
                 let overlays = DirectTouchMenuRouting.openOverlays()
-                if DirectTouchMenuRouting.shouldDismissOverlay(at: event.location, targetPID: target?.pid, overlays: overlays) {
+                if overlays.isEmpty || DirectTouchMenuRouting.shouldDismissOverlay(at: event.location, targetPID: target?.pid, overlays: overlays) {
                     dismissOpenOverlay()
                     menuMayBeOpen = false
+                    dismissedMenu = true
+                    restoreMenuBarCursorIfNeeded()
                     target = Self.applicationTarget(at: event.location)
                 } else {
-                    menuMayBeOpen = !overlays.isEmpty
+                    menuMayBeOpen = true
                 }
             }
-            menuMayBeOpen = menuMayBeOpen || target?.menuItem != nil || target?.statusItemHost == true
+            // The touch that dismisses a menu belongs to what is underneath it. Accessibility
+            // still answers with the closing menu's items for a few frames, and pressing one
+            // (AXPress/AXShowMenu on a menu that is no longer open) makes AppKit open that menu
+            // again and park the app in a menu-tracking session remote events can never end —
+            // Finder then ignored every later tap until it was restarted. A dismissed tap is
+            // therefore an ordinary click on the app, never a menu action.
+            let menuItem = dismissedMenu ? nil : target?.menuItem
+            let menuAction = dismissedMenu ? nil : target?.menuAction
+            let controlItem = dismissedMenu ? nil : target?.controlItem
+            let statusItemHost = dismissedMenu ? false : (target?.statusItemHost ?? false)
+            menuMayBeOpen = menuMayBeOpen || menuItem != nil || statusItemHost
             directTouchPID = target?.pid
             directTouchWindowID = target?.windowID ?? 0
             directTouchWindowFrame = target?.windowFrame
             directTouchClickGroupID &+= 1
-            directTouchMenuItem = target?.menuItem
-            directTouchMenuAction = target?.menuAction
-            directTouchControlItem = target?.controlItem
-            directTouchStatusItemHost = target?.statusItemHost ?? false
+            directTouchMenuItem = menuItem
+            directTouchMenuAction = menuAction
+            directTouchControlItem = controlItem
+            directTouchStatusItemHost = statusItemHost
             deferredDirectTouchDown = directTouchControlItem == nil ? nil : event
             activateTargetIfNeeded()
         case .rightMouseDown:
             var target = Self.applicationTarget(at: event.location)
-            if menuMayBeOpen || DirectTouchMenuRouting.isMenuBarPoint(event.location) {
+            if menuMayBeOpen {
                 let overlays = DirectTouchMenuRouting.openOverlays()
-                if DirectTouchMenuRouting.shouldDismissOverlay(at: event.location, targetPID: target?.pid, overlays: overlays) {
+                if overlays.isEmpty || DirectTouchMenuRouting.shouldDismissOverlay(at: event.location, targetPID: target?.pid, overlays: overlays) {
                     dismissOpenOverlay()
                     menuMayBeOpen = false
+                    restoreMenuBarCursorIfNeeded()
                     target = Self.applicationTarget(at: event.location)
                 }
             }
@@ -328,6 +444,19 @@ final class HIDEventTapSink: SyntheticEventSink, @unchecked Sendable {
                 let result = AXUIElementPerformAction(menuItem, action as CFString)
                 let elapsed = Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000
                 Log.info("directTouch: menu action=\(action) pid=\(directTouchPID ?? 0) result=\(result.rawValue) elapsed=\(elapsed)ms")
+                // Only a successful AXPress on a leaf command performs it and ends the menu
+                // by itself. Pressing an item that owns a submenu, or a press that failed,
+                // leaves a tracking session running; remember that so the next touch ends it
+                // with Escape instead of pressing a stale item and reopening it forever.
+                let submenu = (Self.attribute(menuItem, kAXChildrenAttribute) as? [AXUIElement]) ?? []
+                let menuStillOpen = DirectTouchMenuRouting.leavesMenuTracking(
+                    action: action, succeeded: result == .success, hasSubmenu: !submenu.isEmpty)
+                menuMayBeOpen = menuStillOpen
+                if !menuStillOpen {
+                    // The menu is used: put the local pointer back where it was before the
+                    // menu-bar click moved it.
+                    restoreMenuBarCursorIfNeeded()
+                }
             }
         } else if let controlItem = directTouchControlItem {
             if event.type == .leftMouseUp, event.getIntegerValueField(.mouseEventClickState) != 0 {
@@ -378,6 +507,52 @@ final class HIDEventTapSink: SyntheticEventSink, @unchecked Sendable {
         // A couple of frames for the Window Server to finish closing the menu before the
         // click; measured Escape closes a layer-101 menu well within 60 ms.
         Thread.sleep(forTimeInterval: 0.04)
+    }
+
+    /// Whether the top strip of the touched display actually holds a menu title or status
+    /// item. The top strip also exists while a full-screen app hides the menu bar; a tap
+    /// there must stay an ordinary app tap, never a menu-bar click.
+    private static func menuBarHasTarget(at point: CGPoint) -> Bool {
+        let systemWide = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(systemWide, 0.02)
+        var hit: AXUIElement?
+        if AXUIElementCopyElementAtPosition(systemWide, Float(point.x), Float(point.y), &hit) == .success,
+           let hit, DirectTouchMenuRouting.isMenuRole(attribute(hit, kAXRoleAttribute) as? String) {
+            return true
+        }
+        // Some status items (especially on a virtual display) are not returned by
+        // element-at-position; their hosted Control Center window still is.
+        return DirectTouchStatusItemTargeting.target(at: point, ownPID: getpid()) != nil
+    }
+
+    /// Starts a menu-bar touch as a real HID click on the display that was actually touched.
+    /// Window Server menu tracking only follows real events, and it anchors the drop-down to
+    /// the clicked display; an AX press instead opens it on whichever display owns the active
+    /// AX menu bar (so it appeared on another screen, or left the title highlighted with no
+    /// menu). The cursor is saved once and restored when the menu is used or dismissed.
+    private func beginMenuBarGesture(_ event: CGEvent) {
+        // Close a menu that is actually on screen before switching to another title. Do not
+        // send Escape when no overlay exists: on an inactive display's Space the first real
+        // click activates that Space, and an Escape before it only cancels the activation.
+        if !DirectTouchMenuRouting.openOverlays().isEmpty {
+            dismissOpenOverlay()
+        }
+        if directTouchMenuBarCursorBefore == nil {
+            directTouchMenuBarCursorBefore = CGEvent(source: nil)?.location
+        }
+        directTouchMenuBarGesture = true
+        menuMayBeOpen = true
+        CGWarpMouseCursorPosition(event.location)
+        Log.info("directTouch: menu bar click at \(event.location)")
+        post(event)
+    }
+
+    /// Puts the local pointer back after a menu-bar click, once the menu no longer needs it.
+    private func restoreMenuBarCursorIfNeeded() {
+        guard let before = directTouchMenuBarCursorBefore else { return }
+        directTouchMenuBarCursorBefore = nil
+        CGWarpMouseCursorPosition(before)
+        Log.info("directTouch: menu bar cursor restored")
     }
 
     private func postDirectTouchToApplication(_ event: CGEvent) {
@@ -671,7 +846,9 @@ final class InputInjector {
     // Direct Touch remembers the touched point for the subsequent button
     // events. Hover is deliberately not posted: the Mac's visible arrow must
     // stay where the local user left it, throughout the touch, not warp and
-    // then be restored afterwards. Relative/trackpad input clears this.
+    // then be restored afterwards. The one exception is a menu-bar touch,
+    // which needs a real click on the touched display (see
+    // `HIDEventTapSink.beginMenuBarGesture`). Relative/trackpad input clears this.
     private var absolutePointerLocation: CGPoint?
     // A real event source (vs nil) plus non-zero clickState on down/up: menu
     // tracking treats sourceless/zero-click synthetic clicks as malformed — menus
@@ -743,6 +920,14 @@ final class InputInjector {
         self.eventSink = eventSink
     }
 
+    /// The display this injector targets, in global CG coordinates. Used by the receiver-drawn
+    /// menu bar (PROTOCOL.md 6.18) to map a normalized touch back to a menu-bar point.
+    var displayBounds: CGRect { CGDisplayBounds(displayID) }
+
+    /// Ends a native menu/panel a previous touch left tracking, before the receiver draws its
+    /// own menu for the same title.
+    func dismissOpenMenu() { eventSink.dismissMenuOverlay() }
+
     /// Release every synthetic contact when capture is paused, torn down,
     /// or input is disabled while a gesture is active.
     func cancelActiveInput() {
@@ -783,9 +968,11 @@ final class InputInjector {
                 pointerHeldButton = nil
             }
         }
-        // No restore move: Direct Touch never moved the visible arrow in the
-        // first place. Only forget the synthetic contact's target.
+        // Ordinary Direct Touch never moved the visible arrow. A menu-bar
+        // click did (that is what makes the native menu open on the touched
+        // display), so let the sink put it back and end any tracking session.
         absolutePointerLocation = nil
+        eventSink.cancelDirectTouch()
 
         if penDown {
             penClickSession = nil
@@ -963,6 +1150,10 @@ final class InputInjector {
         inputLock.lock()
         defer { inputLock.unlock() }
         guard inputIsAllowed() else { return }
+        // A single event is bounded; a peer cannot fling the pointer through
+        // an unrepresentable coordinate or amplify its own deltas.
+        let dx = InputSanitizer.finite(dx, limit: 100_000) ?? 0
+        let dy = InputSanitizer.finite(dy, limit: 100_000) ?? 0
         absolutePointerLocation = nil
         if let mapper = targetMapper {
             // The workspace pointer moves freely across tiles; the Mac pointer
@@ -1014,7 +1205,7 @@ final class InputInjector {
         } else {
             point = absolutePointerLocation ?? currentCursor()
         }
-        let clickState = Int64(max(clickCount, 1))
+        let clickState = Int64(InputSanitizer.clickCount(clickCount))
         guard let event = CGEvent(mouseEventSource: source, mouseType: type,
                                   mouseCursorPosition: point, mouseButton: cgButton) else { return }
         event.setIntegerValueField(.mouseEventClickState, value: clickState)
@@ -1032,7 +1223,9 @@ final class InputInjector {
     }
 
     /// Releases at the same synthetic Direct Touch target. No restoration
-    /// event follows: the real Mac arrow stayed at its original location.
+    /// event follows an ordinary touch: the real Mac arrow stayed at its
+    /// original location. (A menu-bar click restores it through the sink's
+    /// `restoreMenuBarCursorIfNeeded`.)
     func handlePointerUp(button: PointerButton, clickCount: Int) {
         inputLock.lock()
         defer { inputLock.unlock() }
@@ -1048,7 +1241,7 @@ final class InputInjector {
         let point = mapped ?? absolutePointerLocation ?? currentCursor()
         guard let event = CGEvent(mouseEventSource: source, mouseType: type,
                                   mouseCursorPosition: point, mouseButton: cgButton) else { return }
-        event.setIntegerValueField(.mouseEventClickState, value: Int64(max(clickCount, 1)))
+        event.setIntegerValueField(.mouseEventClickState, value: Int64(InputSanitizer.clickCount(clickCount)))
         event.flags = heldModifiers.flags   // see `MouseEventFlags`'s doc
         postInputEvent(event)
         pointerHeldButton = nil
@@ -1324,8 +1517,13 @@ final class InputInjector {
         ev.setIntegerValueField(.mouseEventDeltaY, value: 0)
         ev.setIntegerValueField(.mouseEventSubtype, value: Int64(CGEventMouseSubtype.tabletPoint.rawValue))
         ev.setIntegerValueField(.tabletEventDeviceID, value: deviceID)
-        ev.setDoubleValueField(.mouseEventPressure, value: pressure)
-        ev.setIntegerValueField(.tabletEventPointPressure, value: Int64((pressure * 65535.0).rounded()))
+        // Wire pressure is untrusted: clamp before the Double→Int64
+        // conversion, which traps on an out-of-range value and would take
+        // the whole sender down.
+        let boundedPressure = InputSanitizer.pressure(pressure)
+        ev.setDoubleValueField(.mouseEventPressure, value: boundedPressure)
+        ev.setIntegerValueField(.tabletEventPointPressure,
+                                value: Int64((boundedPressure * 65535.0).rounded()))
         ev.setDoubleValueField(.tabletEventTiltX, value: tiltX)
         ev.setDoubleValueField(.tabletEventTiltY, value: tiltY)
         ev.setDoubleValueField(.tabletEventRotation, value: rotation)
@@ -1385,6 +1583,8 @@ final class InputInjector {
     /// (unnormalized, a flat pen reads 1.57 and apps that scale tilt by 90 report
     /// impossible angles).
     private func deriveTilt(azimuth: Double, altitude: Double) -> (Double, Double) {
+        let azimuth = azimuth.isFinite ? azimuth : 0
+        let altitude = altitude.isFinite ? altitude : .pi / 2
         let mag = min(max(0, Double.pi / 2 - altitude) / (Double.pi / 2), 1)
         return (sin(azimuth) * mag, cos(azimuth) * mag)
     }
@@ -1394,12 +1594,16 @@ final class InputInjector {
     /// The Mac point under video point `x`/`y`. In Window mode it goes through
     /// the tile under it (nil over gaps and letterbox).
     func globalPoint(x: Double, y: Double) -> CGPoint? {
+        let x = x.isFinite ? min(max(x, 0), 1) : 0
+        let y = y.isFinite ? min(max(y, 0), 1) : 0
         if let mapper = inputLock.withLock({ targetMapper }) { return mapper.locate(x: x, y: y) }
         return InputCoordinateMapper.point(x: x, y: y, in: CGDisplayBounds(displayID))
     }
 
     private func screenPoint(nx: Double, ny: Double) -> CGPoint {
         if let mappedOverride { return mappedOverride }
+        let nx = nx.isFinite ? min(max(nx, 0), 1) : 0
+        let ny = ny.isFinite ? min(max(ny, 0), 1) : 0
         let bounds = CGDisplayBounds(displayID)
         return CGPoint(x: bounds.minX + nx * bounds.width,
                        y: bounds.minY + ny * bounds.height)

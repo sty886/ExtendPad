@@ -835,7 +835,12 @@ data class FunctionTrayProfile(var slot: ControlProfileSlot, var items: List<Fun
                 ShortcutItem(id = "return", title = "Return", displayKey = "↵", usage = 40, modifiers = ModifierChord(), systemImage = "return") to returnGroup,
             )
             // Opt-in (hidden by default): the only routes to Launchpad and Show Desktop besides the 4/5-finger pinch/spread.
+            // Input Source is macOS's "Select the previous input source" (Control-Space),
+            // for switching the Mac between Chinese and English while the hardware keyboard
+            // sends real HID presses the Mac's input method can compose.
             val systemItems = listOf(
+                ShortcutItem("input-source", "Input Source", "中/英", 44,
+                             ModifierChord(ControlModifier.Control)) to editGroup,
                 ShortcutItem("menu-bar", "Menu Bar", ReceiverGesture.MenuBar, "menubar.rectangle") to systemGroup,
                 ShortcutItem("launchpad", "Launchpad", ReceiverGesture.Launchpad, "square.grid.3x3") to systemGroup,
                 ShortcutItem("show-desktop", "Show Desktop", ReceiverGesture.ShowDesktop, "rectangle.dashed") to systemGroup,

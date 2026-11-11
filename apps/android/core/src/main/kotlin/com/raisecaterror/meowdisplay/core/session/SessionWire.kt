@@ -156,7 +156,9 @@ sealed interface SenderMessage {
     /** [privacyShield]: the Mac covers its own screens while this device is connected (null: an older Mac). */
     /** [user]: the full name of who uses the Mac (paired sessions only; null: hidden or an older Mac). */
     data class Welcome(val pv: Int, val min: Int, val features: Set<String> = emptySet(), val privacyShield: Boolean? = null,
-                       val user: String? = null) : SenderMessage
+                       val user: String? = null,
+                       /** Menu bar height as a fraction of the streamed display (PROTOCOL.md 6.18). */
+                       val barMenuHeight: Double? = null) : SenderMessage
     data class UpdateRequired(val message: String?, val store: String?) : SenderMessage
     data class Pong(val t: Double, val mt: Double) : SenderMessage
     data object Ping : SenderMessage
@@ -221,6 +223,8 @@ sealed interface SenderMessage {
                         ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content?.take(32) }?.toSet() ?: emptySet(),
                     privacyShield = (obj["privacyShield"] as? JsonPrimitive)?.takeIf { !it.isString }?.content?.toBooleanStrictOrNull(),
                     user = PairedMacUser.clean((obj["user"] as? JsonPrimitive)?.takeIf { it.isString }?.content),
+                    barMenuHeight = (obj["barMenuHeight"] as? JsonPrimitive)?.takeIf { !it.isString }?.content?.toDoubleOrNull()
+                        ?.takeIf { it.isFinite() && it in 0.005..0.2 },
                 )
                 "updateRequired" -> UpdateRequired(obj.string("message"), obj.string("store"))
                 "pong" -> {

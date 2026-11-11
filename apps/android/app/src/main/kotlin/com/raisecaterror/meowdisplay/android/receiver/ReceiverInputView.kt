@@ -363,7 +363,15 @@ class ReceiverInputView(
             if (event.repeatCount == 0 && heldModifierKeys.add(name)) sender.modifier(name, true)
             return true
         }
-        val usage = HidKeyMap.usage(event.keyCode) ?: return false
+        val usage = HidKeyMap.usage(event.keyCode)
+        if (usage == null) {
+            // A key with no HID usage (an IME or an emoji picker): its Unicode text is the
+            // only way to send it.
+            val character = event.getUnicodeChar(event.metaState)
+            if (character == 0) return false
+            keyboard.commitText(String(Character.toChars(character)))
+            return true
+        }
         val modifiers = HidKeyMap.modifierNames(event.metaState, swap)
         if (keyboard.keyDown(usage, modifiers)) return true
         if (event.repeatCount > 0 && usage != RemoteKeyboardBridge.BACKSPACE) return true
@@ -372,10 +380,10 @@ class ReceiverInputView(
             usage == RemoteKeyboardBridge.RETURN -> keyboard.returnKey()
             // Command/Control/Option + key is a shortcut for the Mac, sent as one press.
             HidKeyMap.isShortcut(event.metaState) -> keyboard.shortcut(usage, modifiers)
-            else -> {
-                val character = event.getUnicodeChar(event.metaState)
-                if (character == 0) keyboard.shortcut(usage, modifiers) else keyboard.commitText(String(Character.toChars(character)))
-            }
+            // An ordinary key is a real HID press, so the Mac's own input source (Pinyin,
+            // Kana, …) composes it. Committing its Unicode character here would bypass the
+            // Mac's input method and make Chinese impossible.
+            else -> keyboard.keyPress(usage, modifiers)
         }
         return true
     }

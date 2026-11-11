@@ -323,6 +323,13 @@ enum WireMessage {
     static let menu = "menu"                                   // Mac -> receiver: that level's items
     static let menuPress = "menuPress"                         // receiver -> Mac: press one menu item (control)
     static let menuResult = "menuResult"                       // Mac -> receiver: whether it was pressed
+    // Display menu bar (PROTOCOL.md 6.18): the menu bar shown on the streamed display in
+    // Mirror/Extend, read and pressed through Accessibility so the receiver draws the
+    // drop-down itself (macOS anchors Finder's desktop menus to the main display).
+    static let barMenuRequest = "barMenuRequest"               // receiver -> Mac: {x, y, path, req}
+    static let barMenu = "barMenu"                             // Mac -> receiver: that level, or native:true
+    static let barMenuPress = "barMenuPress"                   // receiver -> Mac: press one item (control)
+    static let barMenuResult = "barMenuResult"                 // Mac -> receiver: whether it was pressed
     static let allowInputRequest = "allowInputRequest" // receiver -> Mac: request Allow Input on/off
     static let allowInputState = "allowInputState"   // Mac -> receiver: confirmed Allow Input state
     static let videoRequest = "videoRequest"         // receiver -> Mac: request video production on/off

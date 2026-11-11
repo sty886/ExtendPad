@@ -93,6 +93,14 @@ enum TLSConfigurator {
         sec_protocol_options_set_min_tls_protocol_version(sec, .TLSv13)
         sec_protocol_options_set_max_tls_protocol_version(sec, .TLSv13) // min == max: downgrade-proof
         sec_protocol_options_set_local_identity(sec, identity)          // both roles present a cert
+        // No session tickets or resumption on either transport. A resumed
+        // TLS 1.3 session authenticates with a PSK and skips the verify
+        // block, which is exactly where this app's SPKI pin lives; every
+        // connection must therefore run a full handshake. (QUIC also sets
+        // these in `pinnedQUICOptions`; sharing them here keeps TCP from
+        // being the weaker sibling.)
+        sec_protocol_options_set_tls_tickets_enabled(sec, false)
+        sec_protocol_options_set_tls_resumption_enabled(sec, false)
         if isListener {
             // Without this the listener silently degrades to one-way server
             // auth.

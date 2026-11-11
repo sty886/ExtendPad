@@ -80,6 +80,17 @@ class RemoteKeyboardBridge(
         if (input.keyboardPress(usage, SoftwareKeyboardChordPolicy.modifiers(modifierNames, chord()))) edit(TypedTextEcho.Edit.Reset)
     }
 
+    /**
+     * An ordinary printable key as a real HID press, not committed Unicode text: the Mac's
+     * active input source (for example Chinese Pinyin) must see the keystrokes so it can
+     * compose. Typing the character as text would bypass the Mac's input method entirely.
+     */
+    fun keyPress(usage: Int, modifierNames: List<String>) {
+        if (input.keyboardPress(usage, SoftwareKeyboardChordPolicy.modifiers(modifierNames, chord()))) {
+            edit(TypedTextEcho.Edit.Reset)
+        }
+    }
+
     /** A physical key going down. Only [HELD_USAGES] have a lifecycle; false means "type it instead". */
     fun keyDown(usage: Int, modifierNames: List<String>): Boolean {
         if (usage !in HELD_USAGES) return false

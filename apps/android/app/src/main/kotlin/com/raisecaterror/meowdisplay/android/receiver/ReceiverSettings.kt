@@ -187,6 +187,12 @@ private fun SettingsPageContent(
             val zoomWhileTyping by controller.store.zoomWhileTyping.collectAsState()
             Toggle("Zoom While Typing", zoomWhileTyping) { on -> controller.store.setZoomWhileTyping(on) }
             Caption("Enlarge the area you're typing in when the keyboard is open.")
+            // macOS's "Select the previous input source": the hardware keyboard's letters
+            // now reach the Mac as HID presses, so its Chinese IME can compose them.
+            OutlinedButton(onClick = { controller.keyboard.shortcut(44, listOf("control")) }, enabled = view.inputAllowed) {
+                Text("Switch Input Source (中/英)")
+            }
+            Caption("Sends the Mac's Control-Space input-source switch. Add a Chinese input source on the Mac first.")
             Section("Pointer")
             Choice("Input Mode", PointerInputMode.entries, prefs.inputMode, { it.title }) { mode -> set { it.inputMode = mode } }
             if (prefs.inputMode == PointerInputMode.Trackpad) {

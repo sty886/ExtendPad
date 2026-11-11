@@ -345,10 +345,14 @@ func (s *Session) startCapture() error {
 		}
 	}
 
-	if err := s.sendMessage(wire.AllowInputState(s.injector != nil)); err != nil {
+	// Input starts OFF on every new session, exactly like the Mac sender's
+	// default Ask policy: admission does not grant control. The receiver
+	// asks with allowInputRequest, and only the configured AllowInput master
+	// plus that explicit request can turn it on.
+	if err := s.sendMessage(wire.AllowInputState(false)); err != nil {
 		return err
 	}
-	s.inputGranted.Store(s.injector != nil)
+	s.inputGranted.Store(false)
 	if err := s.sendMessage(wire.DisplayModeState(s.config.Settings.Mode)); err != nil {
 		return err
 	}

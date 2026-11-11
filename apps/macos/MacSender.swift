@@ -148,6 +148,22 @@ struct PhoneInfo: Decodable {
     // alongside pinch/rotateTarget, never a separate storage.
     let appGestureCommands: AppGestureCommands?
 
+    /// The largest panel axis this sender will accept from a receiver's
+    /// `hello`. No supported panel comes close (8K is 7680), and values above
+    /// this are used in point/pixel arithmetic where Swift traps on overflow —
+    /// a paired peer must not be able to crash the sender by announcing an
+    /// absurd geometry.
+    static let maxPanelAxisPixels = 16_384
+
+    /// Panel geometry from the wire, before any virtual-display/encoder math.
+    /// Non-finite or absurd values are rejected, never clamped into a
+    /// plausibly-sized display: a real receiver never sends them.
+    var hasSaneGeometry: Bool {
+        (1...Self.maxPanelAxisPixels).contains(pixelsWide)
+            && (1...Self.maxPanelAxisPixels).contains(pixelsHigh)
+            && scale.isFinite && scale >= 0.5 && scale <= 8
+    }
+
     var kind: String { device ?? "device" }
     var protocolVersion: Int { pv ?? WireProtocol.assumedWhenAbsent }
     /// True only when the receiver explicitly listed `"hevc"` in `codecs`.
@@ -869,6 +885,9 @@ final class MacSender: NSObject, SCStreamOutput, SCStreamDelegate {
     #endif
     /// Window mode only: this receiver's window workspace (queue-confined reference).
     private var workspaceEngine: WindowWorkspaceEngine?
+    /// Extend/Mirror: the receiver-drawn menu bar (PROTOCOL.md 6.18). Its AX work runs on its
+    /// own queue, never on `queue`.
+    private var barMenuService: BarMenuService?
     /// Window/app/display browsing for this receiver in every display mode (Stage Peek over Mirror/Extend).
     private var windowBrowser: WindowBrowserService?
     /// Remote Finder for this session (created on its first request; `queue` only).
@@ -1142,6 +1161,18 @@ final class MacSender: NSObject, SCStreamOutput, SCStreamDelegate {
         queue.setSpecific(key: queueKey, value: ())
         transportController.delegate = self
         selfBox.install(self)
+        let senderBox = self.selfBox
+        let senderQueue = self.queue
+        self.barMenuService = BarMenuService(context: BarMenuService.Context(
+            inputGranted: {
+                guard let sender = senderBox.resolve() else { return false }
+                return InputPolicy.allowsInput() && sender.sessionInputGrant.get()
+            },
+            displayBounds: { senderBox.resolve()?.inputInjector?.displayBounds },
+            frontmostPID: { NSWorkspace.shared.frontmostApplication?.processIdentifier },
+            dismissNativeMenu: { senderBox.resolve()?.inputInjector?.dismissOpenMenu() },
+            send: { message in senderQueue.async { senderBox.currentOnQueue()?.sendJSONObject(message) } }
+        ))
     }
 
     // MARK: - Queue ownership
@@ -5397,6 +5428,17 @@ final class MacSender: NSObject, SCStreamOutput, SCStreamDelegate {
             }
         case "hello":
             if let info = try? JSONDecoder().decode(PhoneInfo.self, from: payload) {
+                guard info.hasSaneGeometry else {
+                    // A real receiver never announces a 0 or 10^18-pixel
+                    // panel. Stop before any Int/UInt32 conversion overflows
+                    // (which traps the whole sender), and refuse this
+                    // connection as a protocol violation.
+                    Log.info("SECURITY: application hello rejected reason=invalidGeometry")
+                    invalidateApplicationSession(reason: "invalidHelloGeometry")
+                    haltCaptureLifecycle()?.stopCapture { _ in }
+                    transportController.cancelConnectionWithoutClearing()
+                    return
+                }
                 // The pinned peer key this connection authenticated with —
                 // TLS metadata over TCP, QUIC metadata over a QUIC Control
                 // stream; the same SPKI encoding either way.
@@ -5601,10 +5643,10 @@ final class MacSender: NSObject, SCStreamOutput, SCStreamDelegate {
         case "touch":
             guard receiverInputIsAllowed() else { return }
             if let phase = obj["phase"] as? String,
-               let x = obj["x"] as? Double,
-               let y = obj["y"] as? Double {
+               let x = InputSanitizer.unit(obj["x"] as? Double),
+               let y = InputSanitizer.unit(obj["y"] as? Double) {
                 inputInjector?.handleTouch(phase: phase, x: x, y: y)
-                if let t = obj["t"] as? Double {
+                if let t = obj["t"] as? Double, t.isFinite {
                     let delta = Date().timeIntervalSince1970 * 1000 - t
                     if delta > -50, delta < 1000 {
                         inputLatencies.append(max(delta, 0))
@@ -5614,7 +5656,8 @@ final class MacSender: NSObject, SCStreamOutput, SCStreamDelegate {
             }
         case "scroll":
             guard receiverInputIsAllowed() else { return }
-            if let dx = obj["dx"] as? Double, let dy = obj["dy"] as? Double {
+            if let dx = InputSanitizer.finite(obj["dx"] as? Double, limit: 100_000),
+               let dy = InputSanitizer.finite(obj["dy"] as? Double, limit: 100_000) {
                 inputInjector?.handleScroll(dx: dx, dy: dy)
             }
         case "pointer":
@@ -5623,20 +5666,24 @@ final class MacSender: NSObject, SCStreamOutput, SCStreamDelegate {
             guard receiverInputIsAllowed(), let action = obj["action"] as? String else { return }
             switch action {
             case "move":
-                if let x = obj["x"] as? Double, let y = obj["y"] as? Double {
+                if let x = InputSanitizer.unit(obj["x"] as? Double),
+                   let y = InputSanitizer.unit(obj["y"] as? Double) {
                     inputInjector?.handlePointerMove(x: x, y: y)
                 }
             case "moveRelative":
-                if let dx = obj["dx"] as? Double, let dy = obj["dy"] as? Double {
+                if let dx = InputSanitizer.finite(obj["dx"] as? Double, limit: 100_000),
+                   let dy = InputSanitizer.finite(obj["dy"] as? Double, limit: 100_000) {
                     inputInjector?.handlePointerMoveRelative(dx: dx, dy: dy)
                 }
             case "down":
                 if let button = PointerButton.parse(obj["button"]) {
-                    inputInjector?.handlePointerDown(button: button, clickCount: obj["clickCount"] as? Int ?? 1)
+                    inputInjector?.handlePointerDown(button: button,
+                                                     clickCount: InputSanitizer.clickCount(obj["clickCount"] as? Int))
                 }
             case "up":
                 if let button = PointerButton.parse(obj["button"]) {
-                    inputInjector?.handlePointerUp(button: button, clickCount: obj["clickCount"] as? Int ?? 1)
+                    inputInjector?.handlePointerUp(button: button,
+                                                   clickCount: InputSanitizer.clickCount(obj["clickCount"] as? Int))
                 }
             default:
                 break   // unknown pointer action from a newer peer — ignore
@@ -5644,15 +5691,15 @@ final class MacSender: NSObject, SCStreamOutput, SCStreamDelegate {
         case "pencil":
             guard receiverInputIsAllowed() else { return }
             if let phase = obj["phase"] as? String,
-               let x = obj["x"] as? Double,
-               let y = obj["y"] as? Double {
+               let x = InputSanitizer.unit(obj["x"] as? Double),
+               let y = InputSanitizer.unit(obj["y"] as? Double) {
                 inputInjector?.handlePencil(
                     phase: phase, x: x, y: y,
-                    pressure: obj["pressure"] as? Double ?? 0,
-                    azimuth: obj["azimuth"] as? Double ?? 0,
-                    altitude: obj["altitude"] as? Double ?? (.pi / 2),
-                    rotation: obj["rotation"] as? Double ?? 0)
-                if let t = obj["t"] as? Double {
+                    pressure: InputSanitizer.pressure(obj["pressure"] as? Double ?? 0),
+                    azimuth: InputSanitizer.finite(obj["azimuth"] as? Double, limit: 4 * .pi) ?? 0,
+                    altitude: InputSanitizer.finite(obj["altitude"] as? Double, limit: 4 * .pi) ?? (.pi / 2),
+                    rotation: InputSanitizer.finite(obj["rotation"] as? Double, limit: 4 * .pi) ?? 0)
+                if let t = obj["t"] as? Double, t.isFinite {
                     let delta = Date().timeIntervalSince1970 * 1000 - t
                     if delta > -50, delta < 1000 {
                         inputLatencies.append(max(delta, 0))
@@ -5667,7 +5714,8 @@ final class MacSender: NSObject, SCStreamOutput, SCStreamDelegate {
             // `scrollable` and the additive `windowDrag`.
             guard let id = obj["id"] as? Int else { return }
             guard receiverInputIsAllowed(), let injector = inputInjector,
-                  let x = obj["x"] as? Double, let y = obj["y"] as? Double,
+                  let x = InputSanitizer.unit(obj["x"] as? Double),
+                  let y = InputSanitizer.unit(obj["y"] as? Double),
                   let point = injector.globalPoint(x: x, y: y) else {
                 sendJSONObject(["type": WireMessage.smartTouchProbeResult, "id": id,
                                 "scrollable": false, "windowDrag": false])
@@ -5688,8 +5736,8 @@ final class MacSender: NSObject, SCStreamOutput, SCStreamDelegate {
         case "proximity":
             guard receiverInputIsAllowed() else { return }
             if let entering = obj["entering"] as? Bool,
-               let x = obj["x"] as? Double,
-               let y = obj["y"] as? Double {
+               let x = InputSanitizer.unit(obj["x"] as? Double),
+               let y = InputSanitizer.unit(obj["y"] as? Double) {
                 inputInjector?.handleProximity(entering: entering, x: x, y: y)
             }
         case "keyboard":
@@ -5786,6 +5834,11 @@ final class MacSender: NSObject, SCStreamOutput, SCStreamDelegate {
             let generation = activeConnectionGeneration
             let selfBox = self.selfBox
             Task { @MainActor in selfBox.resolve()?.onClipboardMessage?(generation, box.value) }
+        case WireMessage.barMenuRequest, WireMessage.barMenuPress:
+            // Extend/Mirror: the receiver draws the streamed display's menu bar menus. Window
+            // mode uses the pane menu bar (`menuRequest`) instead.
+            guard sessionAuthorization.isAdmitted, mode != .window else { return }
+            barMenuService?.handle(type: type, message: obj)
         case WireMessage.workspaceRequest, WireMessage.workspaceFocus, WireMessage.windowAction,
              WireMessage.menuRequest, WireMessage.menuPress, WireMessage.workspaceRetry, WireMessage.workspaceBackdropRequest:
             // Admitted sessions only (gate above). Window metadata exists only
@@ -6106,11 +6159,11 @@ final class MacSender: NSObject, SCStreamOutput, SCStreamDelegate {
     /// gap held back, on this connection only.
     private func connectionAdmitted(generation: UInt64, first: Bool) {
         Log.info("sessionInvite: admitted generation=\(generation) first=\(first)")
-        // This peer already passed pairing, pinned mutual authentication and
-        // admission on this exact connection. ExtendPad therefore grants its
-        // input immediately instead of presenting another Request Control
-        // confirmation on every reopen. The master/console/Never-Allow gates
-        // remain authoritative, and grantSessionInput re-checks the generation.
+        // Only a device the owner explicitly set to Always Allow gets control
+        // when its admitted connection opens; the default Ask policy must
+        // still go through the owner's Request Control prompt. The
+        // master/console/Never-Allow gates remain authoritative, and
+        // grantSessionInput re-checks the generation.
         if let peerID = lastHello?.id,
            AutomaticSessionInputPolicy.shouldGrant(
                masterEnabled: InputPolicy.allowsInput(),
@@ -7008,6 +7061,16 @@ final class MacSender: NSObject, SCStreamOutput, SCStreamDelegate {
             features.append(AppMenuWire.welcomeFeature)
             features.append(WindowCloseWire.welcomeFeature)
         }
+        if mode != .window {
+            // Extend/Mirror: the receiver draws the streamed display's menu bar drop-downs
+            // (PROTOCOL.md 6.18). The height is the fraction of the display the menu bar
+            // occupies, so the receiver can place its touch strip without knowing the scale.
+            features.append(BarMenuWire.welcomeFeature)
+            let bounds = inputInjector?.displayBounds ?? virtualDisplayID.map { CGDisplayBounds($0) }
+            if let bounds, bounds.height > 0 {
+                welcome[BarMenuWire.heightField] = min(0.2, 30.0 / Double(bounds.height))
+            }
+        }
         features.append(RemoteEndpointsWire.welcomeFeature)
         welcome["features"] = features
         sendJSONObject(welcome)
@@ -7477,8 +7540,15 @@ extension MacSender {
     /// The canvas Window mode composites into: the receiver's panel at this
     /// Mac's quality setting, inside its decode ceiling, even dimensions.
     private func windowCanvasSize(for info: PhoneInfo) -> (Int, Int) {
-        let wide = Int(Double(info.pixelsWide) * quality.scale) & ~1
-        let high = Int(Double(info.pixelsHigh) * quality.scale) & ~1
+        // `hello` is already checked by `PhoneInfo.hasSaneGeometry`; the
+        // extra bound here keeps this function safe for any caller and for a
+        // non-finite quality scale.
+        let scale = quality.scale.isFinite ? quality.scale : 1
+        let maxPixels = Double(PhoneInfo.maxPanelAxisPixels * 2)
+        let wideD = min(max(Double(info.pixelsWide) * scale, 2), maxPixels)
+        let highD = min(max(Double(info.pixelsHigh) * scale, 2), maxPixels)
+        let wide = Int(wideD) & ~1
+        let high = Int(highD) & ~1
         let (maxWide, maxHigh) = CodecDecodeCeiling.applicable(
             codec: .h264, legacyMaxEncodeWide: info.maxEncodeWide, legacyMaxEncodeHigh: info.maxEncodeHigh)
         let (w, h) = DecodeCeiling.clamp(width: wide, height: high, maxWide: maxWide, maxHigh: maxHigh)

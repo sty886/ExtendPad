@@ -322,6 +322,10 @@ internal object ChineseText {
         "Codes did not match" to "验证码不一致",
         "Not available in the background" to "在后台不可用",
         "Input" to "输入",
+        "Input Source" to "输入法切换",
+        "Switch Input Source (中/英)" to "切换输入法（中/英）",
+        "Sends the Mac's Control-Space input-source switch. Add a Chinese input source on the Mac first." to
+            "发送 Mac 的 Control-Space 输入法切换快捷键。请先在 Mac 上添加中文输入法。",
         "Gestures" to "手势",
         "Controls" to "控制",
         "Tablet Layout" to "平板布局",

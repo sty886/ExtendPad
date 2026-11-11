@@ -18,6 +18,25 @@ final class AppMenuTests: XCTestCase {
         XCTAssertEqual(AppMenuItem(index: 5, title: "", separator: true).wire["sep"] as? Bool, true)
     }
 
+    func testBarMenuReplyParsesNativeAndOneLevel() {
+        let native = BarMenuReply.parse(["type": "barMenu", "ok": true, "native": true, "req": 4])
+        XCTAssertTrue(native.ok)
+        XCTAssertTrue(native.native)
+        XCTAssertTrue(native.items.isEmpty)
+
+        let level = BarMenuReply.parse([
+            "type": "barMenu", "ok": true, "path": [3], "app": "Finder", "title": "编辑",
+            "height": 0.0375, "req": 5,
+            "items": [["i": 0, "t": "Undo", "key": "⌘Z"], ["i": 1, "sep": true]],
+        ])
+        XCTAssertEqual(level.path, [3])
+        XCTAssertEqual(level.app, "Finder")
+        XCTAssertEqual(level.title, "编辑")
+        XCTAssertEqual(level.items.map(\.title), ["Undo", ""])
+        XCTAssertTrue(level.items[1].separator)
+        XCTAssertEqual(level.height ?? 0, 0.0375, accuracy: 0.0001)
+    }
+
     func testBarFollowsTheFocusedPaneAndPressesWithTitles() {
         var sent: [[String: Any]] = []
         let defaults = UserDefaults(suiteName: "AppMenuTests-\(UUID().uuidString)")!

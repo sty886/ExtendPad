@@ -80,10 +80,22 @@ final class USBHostDiscoveryListener {
         self.onRequest = onRequest
     }
 
+    /// The only client is `adb reverse`, which dials the host's
+    /// 127.0.0.1:9005. Binding to every interface exposed an unauthenticated
+    /// discovery/connect/pair surface to the whole LAN for no benefit.
+    nonisolated static func listenerParameters() -> NWParameters {
+        let params = NWParameters.tcp
+        params.allowLocalEndpointReuse = true
+        params.requiredLocalEndpoint = .hostPort(
+            host: "127.0.0.1",
+            port: NWEndpoint.Port(rawValue: USBHostDiscoveryWire.port)!)
+        return params
+    }
+
     func start() {
         guard listener == nil else { return }
         do {
-            let listener = try NWListener(using: .tcp, on: NWEndpoint.Port(rawValue: USBHostDiscoveryWire.port)!)
+            let listener = try NWListener(using: Self.listenerParameters())
             self.listener = listener
             listener.newConnectionHandler = { [weak self] connection in
                 Task { @MainActor in

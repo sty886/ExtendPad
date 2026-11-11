@@ -516,6 +516,35 @@ final class ReceiverInputForwardingTests: XCTestCase {
         XCTAssertLessThanOrEqual(abs(remainder.y), 0.5)
     }
 
+    func testScrollRemainderClampsHostileDeltasInsteadOfTrapping() {
+        var remainder = ScrollRemainder()
+        // `Int(1e308)` traps in Swift; the clamp must run first.
+        let huge = remainder.take(dxPoints: 1e308, dyPoints: -1e308)
+        XCTAssertLessThanOrEqual(abs(huge.dx), Int32(ScrollRemainder.maxWholeDelta))
+        XCTAssertLessThanOrEqual(abs(huge.dy), Int32(ScrollRemainder.maxWholeDelta))
+        // Non-finite deltas cannot poison the carried remainder.
+        let bad = remainder.take(dxPoints: .nan, dyPoints: .infinity)
+        XCTAssertEqual(bad.dx, 0)
+        XCTAssertEqual(bad.dy, 0)
+        XCTAssertEqual(remainder.take(dxPoints: 0, dyPoints: 2.4).dy, 2, "normal scrolling still works")
+    }
+
+    func testInputSanitizerClampsWireNumbers() {
+        XCTAssertEqual(InputSanitizer.unit(0.25), 0.25)
+        XCTAssertEqual(InputSanitizer.unit(-3), 0)
+        XCTAssertEqual(InputSanitizer.unit(4), 1)
+        XCTAssertNil(InputSanitizer.unit(.nan))
+        XCTAssertEqual(InputSanitizer.finite(1e308, limit: 100), 100)
+        XCTAssertEqual(InputSanitizer.finite(-1e308, limit: 100), -100)
+        XCTAssertNil(InputSanitizer.finite(.infinity, limit: 100))
+        XCTAssertEqual(InputSanitizer.pressure(1e308), 1)
+        XCTAssertEqual(InputSanitizer.pressure(-1), 0)
+        XCTAssertEqual(InputSanitizer.pressure(.nan), 0)
+        XCTAssertEqual(InputSanitizer.clickCount(nil), 1)
+        XCTAssertEqual(InputSanitizer.clickCount(Int.max), 3)
+        XCTAssertEqual(InputSanitizer.clickCount(-7), 1)
+    }
+
     func testSenderRepeatsOnlyHeldKeys() {
         var held = HeldKeyTracker()
         XCTAssertFalse(held.allowsRepeat(.deleteOrBackspace))
