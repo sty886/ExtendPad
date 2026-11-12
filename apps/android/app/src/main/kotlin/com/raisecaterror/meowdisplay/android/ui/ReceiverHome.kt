@@ -46,12 +46,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -131,152 +133,161 @@ fun ReceiverHome(
     }
     var securityFor by rememberSaveable { mutableStateOf<String?>(null) }
     var showSteps by rememberSaveable { mutableStateOf(false) }
-    // Short phones (landscape) keep the links in the scrolling list so the hosts keep their room.
-    val windowHeight = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
-    val compactHeight = windowHeight < 500.dp
+    // Short phones (landscape) and very large text keep the links in the scrolling
+    // list so the hosts keep their room; tablet windows get a fixed home.
+    val density = LocalDensity.current
+    val windowHeight = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
+    val compactHeight = windowHeight < 500.dp || density.fontScale >= 1.5f
     // One row per host, regardless of platform or route. A host found over both
     // Wi-Fi and USB remains one row; discovery alone never connects or trusts it.
     val rows = HomeRows.buildFromNearby(paired.map { HomeRows.Paired(it.peerID, it.name) }, nearby.map { HomeRows.Nearby(it.serviceName, it.advert) })
     val toPair = nearby.filter { it.serviceName in rows.toPair }
     val availablePaired = paired.filter { remote.nearby(it.peerID) || usbHost?.peerID == it.peerID }
+    val usbOnly = usbHost?.takeIf { host ->
+        paired.none { it.peerID == host.peerID } && nearby.none { (it.advert?.installID ?: it.serviceName) == host.peerID }
+    }
+    val hostCount = availablePaired.size + toPair.size + if (usbOnly != null) 1 else 0
+    val hasNotices = mediaUi.updateMessage != null || ui.message != null || mediaUi.connectFailedFor != null
+    // Rows report the height they laid out at, so the card can show exactly two
+    // complete host items at any font scale while the home around them stays put.
+    val hostItemHeights = remember { mutableStateMapOf<Int, Int>() }
+    val hosts: @Composable ColumnScope.() -> Unit = {
+        if (hostCount == 0) {
+            Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (mediaUi.listening) {
+                    CircularProgressIndicator(Modifier.size(16.dp).clearAndSetSemantics {}, strokeWidth = 2.dp)
+                    Spacer(Modifier.width(10.dp))
+                }
+                Text(
+                    if (mediaUi.listening) "Looking for hosts on Wi-Fi and USB…" else "Open ExtendPad to look for hosts.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        availablePaired.forEachIndexed { index, mac ->
+            val awaiting = mediaUi.peerID == mac.peerID && mediaUi.awaitingMacApproval
+            val live = mediaUi.peerID == mac.peerID && mediaUi.admitted && !awaiting
+            val isNearby = remote.nearby(mac.peerID)
+            val isUSB = usbHost?.peerID == mac.peerID
+            val saved = remoteMacs[mac.peerID]?.endpoint ?: remote.automaticEndpoint(mac.peerID)
+            val status = MacStatusReducer.reduce(
+                MacFacts(
+                    peerID = mac.peerID, name = mac.name, nearby = isNearby, remote = saved, connected = live,
+                    route = mediaUi.route.takeIf { live }, awaitingMacApproval = awaiting,
+                    localConnectPending = mediaUi.connectingTo == mac.peerID, attempt = attempts[mac.peerID],
+                    switchedOut = isNearby && remote.switchedOut(mac.peerID),
+                    macLocalNetworkBlocked = isNearby && remote.macLocalNetworkBlocked(mac.peerID),
+                ),
+            ) { id -> paired.firstOrNull { it.peerID == id }?.name }
+            val busy = status is MacStatus.Connecting || status is MacStatus.NeedsMacApproval || usbPending == mac.peerID
+            HostListItem(index, hostItemHeights) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                MacRow(
+                    title = mac.name,
+                    subtitle = listOfNotNull(status.text, if (isUSB) "USB available" else null,
+                        if (isNearby) "Wi-Fi available" else null, mac.user,
+                        "ID " + com.raisecaterror.meowdisplay.core.tls.PinnedTls.shortId(mac.spki))
+                        .joinToString(" · "),
+                    detail = status.hint,
+                    primary = when {
+                        usbPending == mac.peerID -> "Connecting…" to {}
+                        status.action == RowAction.Show -> onReturnToDisplay?.let { "Show" to it }
+                        status.action == RowAction.Cancel -> "Cancel" to { remote.cancel(mac.peerID) }
+                        isNearby || isUSB -> "Connect" to { connectionChoiceFor = mac.peerID }
+                        else -> null
+                    },
+                    enabled = (mediaUi.listening || live || busy) && usbPending != mac.peerID,
+                    menu = buildList {
+                        if (!live && !busy) {
+                            if (isUSB) {
+                                add("USB: Mirror" to { usb.connect(mac.peerID, DisplayMode.Mirror) })
+                                add("USB: Extend" to { usb.connect(mac.peerID, DisplayMode.Extend) })
+                            }
+                            if (isNearby) {
+                                add("Wi-Fi: Mirror" to { remote.connect(mac.peerID, DisplayMode.Mirror) })
+                                add("Wi-Fi: Extend" to { remote.connect(mac.peerID, DisplayMode.Extend) })
+                            }
+                        }
+                        media.inputAutoRequest?.let { auto ->
+                            val on = mac.peerID in autoRequestPeers
+                            add((if (on) "Request Control Automatically: On" else "Request Control Automatically: Off") to { auto.setEnabled(mac.peerID, !on) })
+                        }
+                        add("Connection Requests…" to { policyFor = mac.peerID })
+                        add("Security Details" to { securityFor = mac.peerID })
+                        add("Forget This Mac…" to { forgetFor = mac.peerID })
+                    },
+                )
+            }
+        }
+        val old = oldCopies()
+        if (old.isNotEmpty()) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+            TextButton(onClick = { cleanupList = old }) {
+                Text("Clean Up ${old.size} Old ${if (old.size == 1) "Entry" else "Entries"}…")
+            }
+        }
+        toPair.forEachIndexed { index, mac ->
+            val switchedOut = mac.advert?.switchedOut == true
+            val key = mac.advert?.installID ?: mac.serviceName
+            val hasUSB = usbHost?.peerID == key
+            HostListItem(availablePaired.size + index, hostItemHeights) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                MacRow(
+                    title = mac.advert?.sessionTitle ?: mac.serviceName,
+                    subtitle = if (switchedOut) "Switched Out" else "Not paired" + (if (hasUSB) " · USB available" else ""),
+                    primary = if (switchedOut) null else "Pair" to { pairChoiceFor = key },
+                    enabled = ui.pairingWith == null && usbPending == null, menu = emptyList(),
+                )
+            }
+        }
+        usbOnly?.let { host ->
+            HostListItem(availablePaired.size + toPair.size, hostItemHeights) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                MacRow(
+                    title = host.name, subtitle = "Not paired · USB available",
+                    primary = "Pair" to { pairChoiceFor = host.peerID },
+                    enabled = ui.pairingWith == null && usbPending == null, menu = emptyList(),
+                )
+            }
+        }
+    }
 
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
       // Same arrangement as the iPhone: centred logo, name and one status line on top, the Macs
       // card, then the links and Settings & Help at the bottom centre, always in reach.
       Column(Modifier.fillMaxSize().safeDrawingPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
-        LazyColumn(
-            modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item {
-                Column(Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(top = 20.dp, bottom = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally) {
-                    Image(painterResource(R.drawable.meow_logo), contentDescription = null, modifier = Modifier.size(72.dp))
-                    Spacer(Modifier.height(8.dp))
-                    Text("ExtendPad", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier.semantics { heading() })
-                }
-            }
-            if (onReturnToDisplay != null && mediaUi.admitted && !mediaUi.awaitingMacApproval) {
-                item { ConnectedCard(macName(mediaUi.peerID), mediaUi, onReturnToDisplay, onOpenSettings) { media.session.disconnect() } }
-            } else {
-                item { Hint(sessionStatus(mediaUi, macName(mediaUi.peerID)), centered = true, live = true) }   // under the name, as on iPhone
-            }
-            mediaUi.updateMessage?.let { message -> item { Hint(message, live = true) } }
-            ui.message?.let { message -> item { Notice(message, onDismiss = pairing::dismissMessage) } }
-            mediaUi.connectFailedFor?.let { peer ->
-                item {
-                    Notice("${macName(peer)} didn't connect. Open ExtendPad on it and check that both are on the same Wi-Fi.",
-                        onDismiss = media::dismissConnectFailure)
-                }
-            }
-
-            item {
-                HostsCard {
-                    val usbOnly = usbHost?.takeIf { host ->
-                        paired.none { it.peerID == host.peerID } && nearby.none { (it.advert?.installID ?: it.serviceName) == host.peerID }
-                    }
-                    val hostCount = availablePaired.size + toPair.size + if (usbOnly != null) 1 else 0
-                    if (hostCount == 0) {
-                        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (mediaUi.listening) {
-                                CircularProgressIndicator(Modifier.size(16.dp).clearAndSetSemantics {}, strokeWidth = 2.dp)
-                                Spacer(Modifier.width(10.dp))
-                            }
-                            Text(
-                                if (mediaUi.listening) "Looking for hosts on Wi-Fi and USB…" else "Open ExtendPad to look for hosts.",
-                                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    availablePaired.forEach { mac ->
-                        val awaiting = mediaUi.peerID == mac.peerID && mediaUi.awaitingMacApproval
-                        val live = mediaUi.peerID == mac.peerID && mediaUi.admitted && !awaiting
-                        val isNearby = remote.nearby(mac.peerID)
-                        val isUSB = usbHost?.peerID == mac.peerID
-                        val saved = remoteMacs[mac.peerID]?.endpoint ?: remote.automaticEndpoint(mac.peerID)
-                        val status = MacStatusReducer.reduce(
-                            MacFacts(
-                                peerID = mac.peerID, name = mac.name, nearby = isNearby, remote = saved, connected = live,
-                                route = mediaUi.route.takeIf { live }, awaitingMacApproval = awaiting,
-                                localConnectPending = mediaUi.connectingTo == mac.peerID, attempt = attempts[mac.peerID],
-                                switchedOut = isNearby && remote.switchedOut(mac.peerID),
-                                macLocalNetworkBlocked = isNearby && remote.macLocalNetworkBlocked(mac.peerID),
-                            ),
-                        ) { id -> paired.firstOrNull { it.peerID == id }?.name }
-                        val busy = status is MacStatus.Connecting || status is MacStatus.NeedsMacApproval || usbPending == mac.peerID
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-                        MacRow(
-                            title = mac.name,
-                            subtitle = listOfNotNull(status.text, if (isUSB) "USB available" else null,
-                                if (isNearby) "Wi-Fi available" else null, mac.user,
-                                "ID " + com.raisecaterror.meowdisplay.core.tls.PinnedTls.shortId(mac.spki))
-                                .joinToString(" · "),
-                            detail = status.hint,
-                            primary = when {
-                                usbPending == mac.peerID -> "Connecting…" to {}
-                                status.action == RowAction.Show -> onReturnToDisplay?.let { "Show" to it }
-                                status.action == RowAction.Cancel -> "Cancel" to { remote.cancel(mac.peerID) }
-                                isNearby || isUSB -> "Connect" to { connectionChoiceFor = mac.peerID }
-                                else -> null
-                            },
-                            enabled = (mediaUi.listening || live || busy) && usbPending != mac.peerID,
-                            menu = buildList {
-                                if (!live && !busy) {
-                                    if (isUSB) {
-                                        add("USB: Mirror" to { usb.connect(mac.peerID, DisplayMode.Mirror) })
-                                        add("USB: Extend" to { usb.connect(mac.peerID, DisplayMode.Extend) })
-                                    }
-                                    if (isNearby) {
-                                        add("Wi-Fi: Mirror" to { remote.connect(mac.peerID, DisplayMode.Mirror) })
-                                        add("Wi-Fi: Extend" to { remote.connect(mac.peerID, DisplayMode.Extend) })
-                                    }
-                                }
-                                media.inputAutoRequest?.let { auto ->
-                                    val on = mac.peerID in autoRequestPeers
-                                    add((if (on) "Request Control Automatically: On" else "Request Control Automatically: Off") to { auto.setEnabled(mac.peerID, !on) })
-                                }
-                                add("Connection Requests…" to { policyFor = mac.peerID })
-                                add("Security Details" to { securityFor = mac.peerID })
-                                add("Forget This Mac…" to { forgetFor = mac.peerID })
-                            },
-                        )
-                    }
-                    val old = oldCopies()
-                    if (old.isNotEmpty()) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-                        TextButton(onClick = { cleanupList = old }) {
-                            Text("Clean Up ${old.size} Old ${if (old.size == 1) "Entry" else "Entries"}…")
-                        }
-                    }
-                    toPair.forEach { mac ->
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-                        val switchedOut = mac.advert?.switchedOut == true
-                        val key = mac.advert?.installID ?: mac.serviceName
-                        val hasUSB = usbHost?.peerID == key
-                        MacRow(
-                            title = mac.advert?.sessionTitle ?: mac.serviceName,
-                            subtitle = if (switchedOut) "Switched Out" else "Not paired" + (if (hasUSB) " · USB available" else ""),
-                            primary = if (switchedOut) null else "Pair" to { pairChoiceFor = key },
-                            enabled = ui.pairingWith == null && usbPending == null, menu = emptyList(),
-                        )
-                    }
-                    usbOnly?.let { host ->
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-                        MacRow(
-                            title = host.name, subtitle = "Not paired · USB available",
-                            primary = "Pair" to { pairChoiceFor = host.peerID },
-                            enabled = ui.pairingWith == null && usbPending == null, menu = emptyList(),
-                        )
-                    }
-                }
-            }
-
-            if (compactHeight) item { FooterLinks(onSteps = { showSteps = true }, onDevice = { showDetails = true }) }
+        if (compactHeight) {
+          // Short windows (phones in landscape, very large text) keep a scrolling page,
+          // so the links and Settings stay reachable; the host list still stops at two items.
+          LazyColumn(
+              modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 20.dp),
+              horizontalAlignment = Alignment.CenterHorizontally,
+              verticalArrangement = Arrangement.spacedBy(12.dp),
+          ) {
+              item { HomeHeader() }
+              item { HomeSessionStatus(mediaUi, macName, onReturnToDisplay, onOpenSettings) { media.session.disconnect() } }
+              if (hasNotices) item { HomeNotices(mediaUi, ui.message, pairing::dismissMessage, macName, media::dismissConnectFailure) }
+              item { HostsCard(hostCount, hostItemHeights, hosts) }
+              item { FooterLinks(onSteps = { showSteps = true }, onDevice = { showDetails = true }) }
+          }
+        } else {
+          // The tablet home stays fixed: only the host rows inside the card scroll.
+          // A window just above the compact threshold can still be too short for
+          // the whole home (or the connected card); that rare case scrolls here
+          // instead of clipping Settings, while the list keeps its two-row window.
+          Column(
+              Modifier.weight(1f).fillMaxWidth().padding(horizontal = 20.dp).verticalScroll(rememberScrollState()),
+              horizontalAlignment = Alignment.CenterHorizontally,
+              verticalArrangement = Arrangement.spacedBy(12.dp),
+          ) {
+              HomeHeader()
+              HomeSessionStatus(mediaUi, macName, onReturnToDisplay, onOpenSettings) { media.session.disconnect() }
+              HomeNotices(mediaUi, ui.message, pairing::dismissMessage, macName, media::dismissConnectFailure)
+              HostsCard(hostCount, hostItemHeights, hosts)
+          }
+          FooterLinks(onSteps = { showSteps = true }, onDevice = { showDetails = true },
+              modifier = Modifier.padding(horizontal = 20.dp))
         }
-        if (!compactHeight) FooterLinks(onSteps = { showSteps = true }, onDevice = { showDetails = true },
-            modifier = Modifier.padding(horizontal = 20.dp))
         onOpenSettings?.let { open ->
             OutlinedButton(onClick = open, modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)) {
                 GlyphIcon(OverlayGlyph.Gear, 18.dp, MaterialTheme.colorScheme.primary)
@@ -560,7 +571,16 @@ internal fun sessionStatus(ui: MediaUiState, mac: String): String = when (ui.pha
 }
 
 @Composable
-private fun HostsCard(content: @Composable ColumnScope.() -> Unit) {
+private fun HostsCard(
+    hostCount: Int,
+    itemHeightsPx: Map<Int, Int>,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val density = LocalDensity.current
+    val gap = 10.dp
+    // Exactly two whole host items (plus the gap between them) stay visible; the
+    // rest of the list scrolls inside the card without moving the rest of the home.
+    val viewportPx = hostsViewportPx(hostCount, itemHeightsPx, with(density) { gap.roundToPx() })
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.widthIn(max = 640.dp).fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
@@ -575,12 +595,74 @@ private fun HostsCard(content: @Composable ColumnScope.() -> Unit) {
                 "Select a host, then choose USB or Wi-Fi. Discovery alone never connects.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            // Only the host rows scroll: once there are more than two, the list
-            // gets its own window instead of stretching the page.
             Column(
-                Modifier.fillMaxWidth().heightIn(max = 220.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                Modifier.fillMaxWidth().then(
+                    when {
+                        viewportPx != null -> Modifier.height(with(density) { viewportPx.toDp() })
+                        // Until the rows are measured, keep the card from stretching the page.
+                        hostCount > 0 -> Modifier.heightIn(max = 220.dp)
+                        else -> Modifier
+                    }
+                ).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(gap),
             ) { content() }
+        }
+    }
+}
+
+/** One measured host item, so [HostsCard] knows where two complete items end. */
+@Composable
+private fun HostListItem(index: Int, heightsPx: MutableMap<Int, Int>, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().onSizeChanged { heightsPx[index] = it.height },
+        content = content,
+    )
+}
+
+/** Logo and name, fixed at the top of a tablet home. */
+@Composable
+private fun HomeHeader() {
+    Column(Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(top = 20.dp, bottom = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        Image(painterResource(R.drawable.meow_logo), contentDescription = null, modifier = Modifier.size(72.dp))
+        Spacer(Modifier.height(8.dp))
+        Text("ExtendPad", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.semantics { heading() })
+    }
+}
+
+/** The one status line under the name, or the connected card while a session is up. */
+@Composable
+private fun HomeSessionStatus(
+    mediaUi: MediaUiState,
+    macName: (String?) -> String,
+    onReturnToDisplay: (() -> Unit)?,
+    onOpenSettings: (() -> Unit)?,
+    onDisconnect: () -> Unit,
+) {
+    if (onReturnToDisplay != null && mediaUi.admitted && !mediaUi.awaitingMacApproval) {
+        ConnectedCard(macName(mediaUi.peerID), mediaUi, onReturnToDisplay, onOpenSettings, onDisconnect)
+    } else {
+        Hint(sessionStatus(mediaUi, macName(mediaUi.peerID)), centered = true, live = true)   // under the name, as on iPhone
+    }
+}
+
+/** Transient messages; emits nothing when there is none. */
+@Composable
+private fun HomeNotices(
+    mediaUi: MediaUiState,
+    pairingMessage: String?,
+    onDismissPairingMessage: () -> Unit,
+    macName: (String?) -> String,
+    onDismissConnectFailure: () -> Unit,
+) {
+    if (mediaUi.updateMessage == null && pairingMessage == null && mediaUi.connectFailedFor == null) return
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        mediaUi.updateMessage?.let { message -> Hint(message, live = true) }
+        pairingMessage?.let { message -> Notice(message, onDismiss = onDismissPairingMessage) }
+        mediaUi.connectFailedFor?.let { peer ->
+            Notice("${macName(peer)} didn't connect. Open ExtendPad on it and check that both are on the same Wi-Fi.",
+                onDismiss = onDismissConnectFailure)
         }
     }
 }
