@@ -53,6 +53,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -133,11 +134,14 @@ fun ReceiverHome(
     }
     var securityFor by rememberSaveable { mutableStateOf<String?>(null) }
     var showSteps by rememberSaveable { mutableStateOf(false) }
-    // Short phones (landscape) and very large text keep the links in the scrolling
-    // list so the hosts keep their room; tablet windows get a fixed home.
+    // Only windows too short for the fixed home (phones in landscape, a tablet in a very
+    // short split-screen pane) keep a scrolling page so Settings stays reachable.
     val density = LocalDensity.current
     val windowHeight = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
-    val compactHeight = windowHeight < 500.dp || density.fontScale >= 1.5f
+    val compactHeight = windowHeight < 560.dp
+    // Short tablet windows trade the helper copy and some header space for a home
+    // that fits without any page scrolling; only the host list moves.
+    val tightHome = windowHeight < 700.dp
     // One row per host, regardless of platform or route. A host found over both
     // Wi-Fi and USB remains one row; discovery alone never connects or trusts it.
     val rows = HomeRows.buildFromNearby(paired.map { HomeRows.Paired(it.peerID, it.name) }, nearby.map { HomeRows.Nearby(it.serviceName, it.advert) })
@@ -257,33 +261,31 @@ fun ReceiverHome(
       // card, then the links and Settings & Help at the bottom centre, always in reach.
       Column(Modifier.fillMaxSize().safeDrawingPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
         if (compactHeight) {
-          // Short windows (phones in landscape, very large text) keep a scrolling page,
-          // so the links and Settings stay reachable; the host list still stops at two items.
+          // A phone in landscape cannot hold the fixed home together with the links and
+          // Settings, so that one narrow case keeps a scrolling page.
           LazyColumn(
               modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 20.dp),
               horizontalAlignment = Alignment.CenterHorizontally,
-              verticalArrangement = Arrangement.spacedBy(12.dp),
+              verticalArrangement = Arrangement.spacedBy(if (tightHome) 8.dp else 12.dp),
           ) {
-              item { HomeHeader() }
-              item { HomeSessionStatus(mediaUi, macName, onReturnToDisplay, onOpenSettings) { media.session.disconnect() } }
-              if (hasNotices) item { HomeNotices(mediaUi, ui.message, pairing::dismissMessage, macName, media::dismissConnectFailure) }
-              item { HostsCard(hostCount, hostItemHeights, hosts) }
+              item { HomeHeader(tight = true) }
+              item { HomeSessionStatus(mediaUi, macName, onReturnToDisplay, onOpenSettings, tight = true) { media.session.disconnect() } }
+              if (hasNotices) item { HomeNotices(mediaUi, ui.message, pairing::dismissMessage, macName, media::dismissConnectFailure, tight = true) }
+              item { HostsCard(hostCount, hostItemHeights, tight = true, content = hosts) }
               item { FooterLinks(onSteps = { showSteps = true }, onDevice = { showDetails = true }) }
           }
         } else {
-          // The tablet home stays fixed: only the host rows inside the card scroll.
-          // A window just above the compact threshold can still be too short for
-          // the whole home (or the connected card); that rare case scrolls here
-          // instead of clipping Settings, while the list keeps its two-row window.
+          // The home is fixed: only the rows inside the host card scroll, so the app icon,
+          // status, links and Settings never move.
           Column(
-              Modifier.weight(1f).fillMaxWidth().padding(horizontal = 20.dp).verticalScroll(rememberScrollState()),
+              Modifier.weight(1f).fillMaxWidth().padding(horizontal = 20.dp).clipToBounds(),
               horizontalAlignment = Alignment.CenterHorizontally,
-              verticalArrangement = Arrangement.spacedBy(12.dp),
+              verticalArrangement = Arrangement.spacedBy(if (tightHome) 8.dp else 12.dp),
           ) {
-              HomeHeader()
-              HomeSessionStatus(mediaUi, macName, onReturnToDisplay, onOpenSettings) { media.session.disconnect() }
-              HomeNotices(mediaUi, ui.message, pairing::dismissMessage, macName, media::dismissConnectFailure)
-              HostsCard(hostCount, hostItemHeights, hosts)
+              HomeHeader(tight = tightHome)
+              HomeSessionStatus(mediaUi, macName, onReturnToDisplay, onOpenSettings, tight = tightHome) { media.session.disconnect() }
+              HomeNotices(mediaUi, ui.message, pairing::dismissMessage, macName, media::dismissConnectFailure, tight = tightHome)
+              HostsCard(hostCount, hostItemHeights, tight = tightHome, content = hosts)
           }
           FooterLinks(onSteps = { showSteps = true }, onDevice = { showDetails = true },
               modifier = Modifier.padding(horizontal = 20.dp))
@@ -437,13 +439,16 @@ fun ReceiverHome(
 }
 
 @Composable
-private fun ConnectedCard(mac: String, ui: MediaUiState, onReturn: () -> Unit, onSettings: (() -> Unit)?, onDisconnect: () -> Unit) {
+private fun ConnectedCard(mac: String, ui: MediaUiState, onReturn: () -> Unit, onSettings: (() -> Unit)?, onDisconnect: () -> Unit, tight: Boolean = false) {
     var confirm by remember { mutableStateOf(false) }
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
         modifier = Modifier.widthIn(max = 640.dp).fillMaxWidth(),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(
+            Modifier.padding(if (tight) 12.dp else 16.dp),
+            verticalArrangement = Arrangement.spacedBy(if (tight) 6.dp else 8.dp),
+        ) {
             // One reading for the status, spoken again when it changes (for example when control is granted).
             Column(Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
                 Text("Connected to $mac", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
@@ -574,27 +579,33 @@ internal fun sessionStatus(ui: MediaUiState, mac: String): String = when (ui.pha
 private fun HostsCard(
     hostCount: Int,
     itemHeightsPx: Map<Int, Int>,
+    tight: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val density = LocalDensity.current
-    val gap = 10.dp
+    val gap = if (tight) 8.dp else 10.dp
     // Exactly two whole host items (plus the gap between them) stay visible; the
     // rest of the list scrolls inside the card without moving the rest of the home.
     val viewportPx = hostsViewportPx(hostCount, itemHeightsPx, with(density) { gap.roundToPx() })
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.widthIn(max = 640.dp).fillMaxWidth()) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(
+            Modifier.padding(horizontal = 16.dp, vertical = if (tight) 12.dp else 16.dp),
+            verticalArrangement = Arrangement.spacedBy(if (tight) 8.dp else 10.dp),
+        ) {
             Text(
                 "Available Hosts", style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.semantics { heading() },
             )
-            Text(
-                "Choose an available computer as this tablet's display source.",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                "Select a host, then choose USB or Wi-Fi. Discovery alone never connects.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (!tight) {
+                Text(
+                    "Choose an available computer as this tablet's display source.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "Select a host, then choose USB or Wi-Fi. Discovery alone never connects.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Column(
                 Modifier.fillMaxWidth().then(
                     when {
@@ -621,13 +632,13 @@ private fun HostListItem(index: Int, heightsPx: MutableMap<Int, Int>, content: @
 
 /** Logo and name, fixed at the top of a tablet home. */
 @Composable
-private fun HomeHeader() {
-    Column(Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(top = 20.dp, bottom = 4.dp),
+private fun HomeHeader(tight: Boolean = false) {
+    Column(Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(top = if (tight) 8.dp else 20.dp, bottom = if (tight) 0.dp else 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        Image(painterResource(R.drawable.meow_logo), contentDescription = null, modifier = Modifier.size(72.dp))
-        Spacer(Modifier.height(8.dp))
-        Text("ExtendPad", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.semantics { heading() })
+        Image(painterResource(R.drawable.meow_logo), contentDescription = null, modifier = Modifier.size(if (tight) 56.dp else 72.dp))
+        Spacer(Modifier.height(if (tight) 4.dp else 8.dp))
+        Text("ExtendPad", style = if (tight) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.semantics { heading() })
     }
 }
 
@@ -638,10 +649,11 @@ private fun HomeSessionStatus(
     macName: (String?) -> String,
     onReturnToDisplay: (() -> Unit)?,
     onOpenSettings: (() -> Unit)?,
+    tight: Boolean = false,
     onDisconnect: () -> Unit,
 ) {
     if (onReturnToDisplay != null && mediaUi.admitted && !mediaUi.awaitingMacApproval) {
-        ConnectedCard(macName(mediaUi.peerID), mediaUi, onReturnToDisplay, onOpenSettings, onDisconnect)
+        ConnectedCard(macName(mediaUi.peerID), mediaUi, onReturnToDisplay, onOpenSettings, onDisconnect, tight)
     } else {
         Hint(sessionStatus(mediaUi, macName(mediaUi.peerID)), centered = true, live = true)   // under the name, as on iPhone
     }
@@ -655,9 +667,10 @@ private fun HomeNotices(
     onDismissPairingMessage: () -> Unit,
     macName: (String?) -> String,
     onDismissConnectFailure: () -> Unit,
+    tight: Boolean = false,
 ) {
     if (mediaUi.updateMessage == null && pairingMessage == null && mediaUi.connectFailedFor == null) return
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(if (tight) 8.dp else 12.dp)) {
         mediaUi.updateMessage?.let { message -> Hint(message, live = true) }
         pairingMessage?.let { message -> Notice(message, onDismiss = onDismissPairingMessage) }
         mediaUi.connectFailedFor?.let { peer ->
