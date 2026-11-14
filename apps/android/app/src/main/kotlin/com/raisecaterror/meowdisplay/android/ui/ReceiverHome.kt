@@ -76,11 +76,12 @@ import com.raisecaterror.meowdisplay.android.discovery.Bonjour
 import com.raisecaterror.meowdisplay.android.identity.DeviceIdentity
 import com.raisecaterror.meowdisplay.android.pairing.PairingController
 import com.raisecaterror.meowdisplay.android.remote.RemoteAccess
+import com.raisecaterror.meowdisplay.core.remote.HomeRowAction
+import com.raisecaterror.meowdisplay.core.remote.HomeRowActions
 import com.raisecaterror.meowdisplay.core.remote.HomeRows
 import com.raisecaterror.meowdisplay.core.remote.MacFacts
 import com.raisecaterror.meowdisplay.core.remote.MacStatus
 import com.raisecaterror.meowdisplay.core.remote.MacStatusReducer
-import com.raisecaterror.meowdisplay.core.remote.RowAction
 import com.raisecaterror.meowdisplay.android.session.MediaController
 import com.raisecaterror.meowdisplay.android.session.MediaUiState
 import com.raisecaterror.meowdisplay.android.trust.PinStore
@@ -146,11 +147,15 @@ fun ReceiverHome(
     // Wi-Fi and USB remains one row; discovery alone never connects or trusts it.
     val rows = HomeRows.buildFromNearby(paired.map { HomeRows.Paired(it.peerID, it.name) }, nearby.map { HomeRows.Nearby(it.serviceName, it.advert) })
     val toPair = nearby.filter { it.serviceName in rows.toPair }
-    val availablePaired = paired.filter { remote.nearby(it.peerID) || usbHost?.peerID == it.peerID }
+    // Every paired Mac keeps a row, even while Bonjour cannot see it right now: after a long
+    // disconnect the host list could be empty and the only thing left was "Looking for hosts…",
+    // with no way to ask for the Mac again. The row's status says whether it is nearby, has a
+    // saved remote address, or is simply not found, and its button always has a next step.
+    val pairedRows = paired.distinctBy { it.peerID }
     val usbOnly = usbHost?.takeIf { host ->
         paired.none { it.peerID == host.peerID } && nearby.none { (it.advert?.installID ?: it.serviceName) == host.peerID }
     }
-    val hostCount = availablePaired.size + toPair.size + if (usbOnly != null) 1 else 0
+    val hostCount = pairedRows.size + toPair.size + if (usbOnly != null) 1 else 0
     val hasNotices = mediaUi.updateMessage != null || ui.message != null || mediaUi.connectFailedFor != null
     // Rows report the height they laid out at, so the card can show exactly two
     // complete host items at any font scale while the home around them stays put.
@@ -165,10 +170,14 @@ fun ReceiverHome(
                 Text(
                     if (mediaUi.listening) "Looking for hosts on Wi-Fi and USB…" else "Open ExtendPad to look for hosts.",
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
                 )
+                // A long idle can leave NsdManager with nothing to report. Let the
+                // person ask again instead of waiting forever or restarting the app.
+                TextButton(onClick = { pairing.refreshDiscovery() }) { Text("Refresh") }
             }
         }
-        availablePaired.forEachIndexed { index, mac ->
+        pairedRows.forEachIndexed { index, mac ->
             val awaiting = mediaUi.peerID == mac.peerID && mediaUi.awaitingMacApproval
             val live = mediaUi.peerID == mac.peerID && mediaUi.admitted && !awaiting
             val isNearby = remote.nearby(mac.peerID)
@@ -184,6 +193,7 @@ fun ReceiverHome(
                 ),
             ) { id -> paired.firstOrNull { it.peerID == id }?.name }
             val busy = status is MacStatus.Connecting || status is MacStatus.NeedsMacApproval || usbPending == mac.peerID
+            val rowAction = HomeRowActions.primary(status, isNearby, isUSB)
             HostListItem(index, hostItemHeights) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
                 MacRow(
@@ -193,14 +203,19 @@ fun ReceiverHome(
                         "ID " + com.raisecaterror.meowdisplay.core.tls.PinnedTls.shortId(mac.spki))
                         .joinToString(" · "),
                     detail = status.hint,
-                    primary = when {
-                        usbPending == mac.peerID -> "Connecting…" to {}
-                        status.action == RowAction.Show -> onReturnToDisplay?.let { "Show" to it }
-                        status.action == RowAction.Cancel -> "Cancel" to { remote.cancel(mac.peerID) }
-                        isNearby || isUSB -> "Connect" to { connectionChoiceFor = mac.peerID }
-                        else -> null
+                    primary = if (usbPending == mac.peerID) "Connecting…" to {} else when (rowAction) {
+                        HomeRowAction.RouteChoice -> "Connect" to { connectionChoiceFor = mac.peerID }
+                        HomeRowAction.Connect -> "Connect" to { remote.connect(mac.peerID, DisplayMode.Extend) }
+                        HomeRowAction.Retry -> "Retry" to { remote.connect(mac.peerID, DisplayMode.Extend) }
+                        HomeRowAction.Show -> onReturnToDisplay?.let { "Show" to it }
+                        HomeRowAction.Cancel -> "Cancel" to { remote.cancel(mac.peerID) }
+                        HomeRowAction.None -> null
                     },
-                    enabled = (mediaUi.listening || live || busy) && usbPending != mac.peerID,
+                    enabled = when (rowAction) {
+                        HomeRowAction.None -> false
+                        HomeRowAction.Show -> onReturnToDisplay != null
+                        else -> (mediaUi.listening || live || busy) && usbPending != mac.peerID
+                    },
                     menu = buildList {
                         if (!live && !busy) {
                             if (isUSB) {
@@ -234,7 +249,7 @@ fun ReceiverHome(
             val switchedOut = mac.advert?.switchedOut == true
             val key = mac.advert?.installID ?: mac.serviceName
             val hasUSB = usbHost?.peerID == key
-            HostListItem(availablePaired.size + index, hostItemHeights) {
+            HostListItem(pairedRows.size + index, hostItemHeights) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
                 MacRow(
                     title = mac.advert?.sessionTitle ?: mac.serviceName,
@@ -245,7 +260,7 @@ fun ReceiverHome(
             }
         }
         usbOnly?.let { host ->
-            HostListItem(availablePaired.size + toPair.size, hostItemHeights) {
+            HostListItem(pairedRows.size + toPair.size, hostItemHeights) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
                 MacRow(
                     title = host.name, subtitle = "Not paired · USB available",

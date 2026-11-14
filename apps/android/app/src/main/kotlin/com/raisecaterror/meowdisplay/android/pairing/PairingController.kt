@@ -130,6 +130,14 @@ class PairingController(
         if (remoteJob?.isActive == true) cancelRemote()
     }
 
+    /**
+     * Home's Refresh / Search Again: re-register the Bonjour browse now. iOS and the Mac receiver
+     * also let the person ask again instead of waiting for a stalled discovery to heal.
+     */
+    fun refreshDiscovery() {
+        bonjour.refreshBrowsing()
+    }
+
     /** The user compared the codes: true when they match. */
     fun answer(matches: Boolean) {
         val prompt = state.value.prompt ?: return
