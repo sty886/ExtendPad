@@ -423,8 +423,12 @@ fun ReceiverScreen(
         // Observed (collectAsState), not read once: entering or leaving Window mode, or selecting
         // another pane, must move the pill between the screen and the pane.
         val promptInPane = workspace?.ui?.collectAsState()?.value?.let { it.windowMode && it.active != null } == true
+        // Clean Direct Touch hides the trays, but the Request Control pill is not
+        // navigation chrome: it is the only on-surface way to ask for input. A
+        // session that starts View Only (every Linux sender session does) would
+        // otherwise ignore the first touch with no visible next step.
         InputPromptCapsule(
-            kind = state.prompt.takeIf { !promptInPane && !cleanDirectTouch },
+            kind = state.prompt.takeIf { !promptInPane },
             onTap = controller::requestInputTapped,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = (insets.bottom + 76 - 22).dp),
         )

@@ -72,6 +72,11 @@ func TestMessages(t *testing.T) {
 	if got := AllowInputState(false); got["allowed"] != false || got["state"] != "off" {
 		t.Fatalf("allowInputState: %v", got)
 	}
+	// A sender that cannot inject says so once; the receiver must not keep
+	// offering a request that could only be denied.
+	if got := AllowInputStateAs(false, "requestsDisabled"); got["allowed"] != false || got["state"] != "requestsDisabled" {
+		t.Fatalf("allowInputStateAs: %v", got)
+	}
 }
 
 func TestControlHasNoNUL(t *testing.T) {

@@ -149,6 +149,13 @@ func AllowInputState(allowed bool) map[string]any {
 	if allowed {
 		state = "allowed"
 	}
+	return AllowInputStateAs(allowed, state)
+}
+
+// AllowInputStateAs reports an explicit pv 18 consent `state`
+// (off/requesting/allowed/notAllowed/requestsDisabled). `allowed` stays the
+// effective on/off summary every peer understands.
+func AllowInputStateAs(allowed bool, state string) map[string]any {
 	return map[string]any{"type": "allowInputState", "allowed": allowed, "state": state}
 }
 

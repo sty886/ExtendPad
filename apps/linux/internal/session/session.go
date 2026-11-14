@@ -342,14 +342,24 @@ func (s *Session) startCapture() error {
 			s.logf("input disabled: %v", err)
 		} else {
 			s.injector = injector
+			s.logf("input enabled (XTEST)")
 		}
+	} else {
+		s.logf("input disabled by settings (--no-input)")
 	}
 
 	// Input starts OFF on every new session, exactly like the Mac sender's
 	// default Ask policy: admission does not grant control. The receiver
 	// asks with allowInputRequest, and only the configured AllowInput master
 	// plus that explicit request can turn it on.
-	if err := s.sendMessage(wire.AllowInputState(false)); err != nil {
+	// Without an injector no request can ever be granted, so say so once:
+	// "requestsDisabled" stops the receiver from offering a request that
+	// could only be denied silently.
+	if s.injector == nil {
+		if err := s.sendMessage(wire.AllowInputStateAs(false, "requestsDisabled")); err != nil {
+			return err
+		}
+	} else if err := s.sendMessage(wire.AllowInputState(false)); err != nil {
 		return err
 	}
 	s.inputGranted.Store(false)
@@ -471,11 +481,19 @@ func (s *Session) handle(message map[string]any) {
 	case "sleeping":
 		s.stop("receiver is asleep", true)
 	case "allowInputRequest":
-		wanted := boolean(message["allowed"]) && s.injector != nil
+		if s.injector == nil {
+			// This sender cannot inject (no XTEST/display access). Never leave
+			// the receiver retrying a request that can only be denied.
+			s.logf("input request refused: no XTEST injector")
+			_ = s.sendMessage(wire.AllowInputStateAs(false, "requestsDisabled"))
+			return
+		}
+		wanted := boolean(message["allowed"])
 		s.inputGranted.Store(wanted)
-		if !wanted && s.injector != nil {
+		if !wanted {
 			s.injector.ReleaseAll()
 		}
+		s.logf("input request: %v", wanted)
 		_ = s.sendMessage(wire.AllowInputState(wanted))
 	case "videoRequest":
 		enabled := boolean(message["enabled"])
