@@ -1,2 +1,2 @@
-app_identifier(["com.raisecaterror.meowdisplay.mac", "com.raisecaterror.meowdisplay.mac.receiver"])
+app_identifier(["com.extendpad.mac", "com.extendpad.mac.receiver"])
 team_id(ENV["DEVELOPMENT_TEAM"])
