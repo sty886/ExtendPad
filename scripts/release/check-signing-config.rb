@@ -4,9 +4,10 @@
 # Static signing-configuration checks that need no credential, so the
 # main-branch preflight can run them: every shipped bundle id is the same in
 # project.yml, fastlane/Fastfile and fastlane/Matchfile (a mismatch makes
-# match fetch the wrong profile, which surfaces only mid-release), and
-# project.yml ships exactly the Sparkle public key the published baseline
-# (baseline.env) trusts.
+# match fetch the wrong profile, which surfaces only mid-release), and a
+# project.yml that configures Sparkle ships exactly the one public key the
+# published baseline (baseline.env) trusts. A build with no update feed yet
+# declares neither a feed URL nor a key, so it has nothing to compare.
 #
 # Usage: check-signing-config.rb [repo root]   (exit 1 with every problem listed)
 
@@ -40,8 +41,13 @@ def signing_problems(root)
     problems << "#{file} bundle ids #{found.inspect} differ from project.yml's #{ids['project.yml'].inspect}"
   end
   keys = project.scan(/^\s*SUPublicEDKey:\s*(\S+)/).flatten.uniq
+  feeds = project.scan(/^\s*SUFeedURL:\s*(\S+)/).flatten.uniq
   baseline = read.("scripts/release/baseline.env")[/^BASELINE_SUPUBLICEDKEY=(\S+)/, 1]
-  if keys.size != 1
+  if keys.empty?
+    # Nothing to trust yet (ExtendPad ships no update feed). An appcast
+    # without a key would accept unsigned updates, so keep refusing that.
+    problems << "project.yml declares SUFeedURL without SUPublicEDKey" unless feeds.empty?
+  elsif keys.size != 1
     problems << "project.yml must declare exactly one SUPublicEDKey (found #{keys.size})"
   elsif keys.first != baseline
     problems << "project.yml's SUPublicEDKey is not baseline.env's published key; installed copies would reject the feed"

@@ -21,8 +21,8 @@ end
 
 # The two Mac apps the release stages operate on (`app:` option).
 MAC_APPS = {
-  "sender"   => { scheme: "OpenSidecarMac",         bundle_id: "com.raisecaterror.meowdisplay.mac",          name: "MeowDisplay" },
-  "receiver" => { scheme: "OpenSidecarMacReceiver", bundle_id: "com.raisecaterror.meowdisplay.mac.receiver", name: "MeowDisplay Receiver" }
+  "sender"   => { scheme: "OpenSidecarMac",         bundle_id: "com.extendpad.mac",          name: "MeowDisplay" },
+  "receiver" => { scheme: "OpenSidecarMacReceiver", bundle_id: "com.extendpad.mac.receiver", name: "MeowDisplay Receiver" }
 }.freeze
 
 def mac_app(options)
